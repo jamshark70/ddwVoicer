@@ -55,7 +55,8 @@ SynthVoicerNode {
 			out = Array.new;
 			ar.pairsDo({ |name, value|
 				if(#[\freq, \freqlag, \gate, \t_gate, \out, \outbus].includes(name.asSymbol).not
-					and: { value.rate == \scalar }
+					// Buffers are 'noncontrol', per crucial-library
+					and: { #[noncontrol, scalar].includes(value.rate) }
 				) {
 					out = out ++ [name.asSymbol, value];
 				};
