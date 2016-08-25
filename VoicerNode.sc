@@ -118,6 +118,7 @@ SynthVoicerNode {
 					(syn == synth).if({
 						reserved = isPlaying = isReleasing = false;
 						synth = nil;
+						voicer.didReleaseNode(this);
 					});
 					syn.releaseDependants;	// remove node and Updater from dependants dictionary
 				});
@@ -362,6 +363,7 @@ InstrVoicerNode : SynthVoicerNode {
 				(syn == synth).if({
 					reserved = isPlaying = isReleasing = false;
 					synth = nil;
+					voicer.didReleaseNode(this);
 				});
 				syn.releaseDependants;	// remove node and Updater from dependants dictionary
 			});

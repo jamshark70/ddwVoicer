@@ -306,6 +306,12 @@ Voicer {		// collect and manage voicer nodes
 		susPedalNodes = IdentitySet.new;
 	}
 
+	didReleaseNode { |node|
+		if(nodes.any(_.isPlaying).not) {
+			this.changed(\allNodesReleased);
+		};
+	}
+
 // suspednodes?
 	releaseNow1 { arg freq, sec;
 		^this.firstNodeFreq(freq).releaseNow(sec);
