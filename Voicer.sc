@@ -117,11 +117,11 @@ Voicer {		// collect and manage voicer nodes
 	}
 
 	earliest {	// earliest triggered node
-		^nodes.copy.sort({ arg a, b; a.lastTrigger < b.lastTrigger }).at(0)
+		^nodes.minItem(_.lastTrigger)
 	}
 
 	latest {
-		^nodes.copy.sort({ arg a, b; a.lastTrigger > b.lastTrigger }).at(0)
+		^nodes.maxItem(_.lastTrigger)
 	}
 
 		// find earliest active node with this frequency
@@ -135,7 +135,7 @@ Voicer {		// collect and manage voicer nodes
 			nodesTemp = (IdentitySet(nodesTemp.size).addAll(nodesTemp).removeAll(susPedalNodes))
 				.asArray;
 		});
-		^nodesTemp.sort({ |a, b| a.lastTrigger < b.lastTrigger }).at(0)
+		^nodesTemp.minItem(_.lastTrigger)
 	}
 
 		// this method is reserved for Event usage
@@ -194,12 +194,12 @@ Voicer {		// collect and manage voicer nodes
 
 	preferEarly {
 			// find first non-playing node -- THE DEFAULT METHOD
-		^this.nonplaying.sort({ arg a, b; a.lastTrigger < b.lastTrigger }).at(0)
+		^this.nonplaying.minItem(_.lastTrigger)
 	}
 
 	preferLate {
 			// find last non-playing node
-		^this.nonplaying.sort({ arg a, b; a.lastTrigger > b.lastTrigger }).at(0)
+		^this.nonplaying.maxItem(_.lastTrigger)
 	}
 
 // PLAYING/RELEASING METHODS:
