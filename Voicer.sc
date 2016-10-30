@@ -686,7 +686,7 @@ Voicer {		// collect and manage voicer nodes
 					~nodes.do({ |node, i|
 						var latency, freq, length;
 
-						latency = i * strum + lag;
+						latency = lag;
 							// backward compatibility: I should NOT add server latency
 							// for newer versions with Julian's schedbundle method
 						if(~addServerLatencyToLag ? false) {
@@ -695,14 +695,14 @@ Voicer {		// collect and manage voicer nodes
 						freq = ~freq.wrapAt(i);
 						length = ~sustain.wrapAt(i);
 
-						~schedBundleArray.(latency, ~timingOffset,
+						~schedBundleArray.(latency, ~timingOffset + (i * strum),
 							node.server,
 							node.server.makeBundle(false, {
 								node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i));
 							})
 						);
 						(length.notNil and: { length != inf }).if({
-							thisThread.clock.sched(length + timingOffset, {
+							thisThread.clock.sched(length + timingOffset + (i * strum), {
 								voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
 									node.server.latency.notNil.if({ lag + node.server.latency }));
 							});
