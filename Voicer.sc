@@ -660,7 +660,7 @@ Voicer {		// collect and manage voicer nodes
 				var	lag, strum, sustain, i, timingOffset = ~timingOffset ? 0, releaseGate,
 					voicer = ~voicer;
 
-				if(currentEnvironment.isRest.not or: { voicer.isNil }) {
+				if(voicer.notNil and: { currentEnvironment.isRest.not }) {
 					~freq = (~freq.value + ~detune).asArray;
 					~amp = ~amp.value.asArray;
 					lag = ~lag;
