@@ -257,11 +257,12 @@ Voicer {		// collect and manage voicer nodes
 
 	gate1 { arg freq, dur, gate = 1, args, lat = -1;
 			// play & schedule release for 1 note
-		var node, synth;
+		var node, cl;
 		(lat ? 0).isNegative.if({ lat = latency });
 		node = this.trigger1(freq, gate, args, lat);
-		synth = node.synth;
-		(clock ? thisThread.clock).sched(dur, {
+		cl = clock ? thisThread.clock;
+		node.releaseTime = cl.beats2secs(cl.beats + dur);
+		cl.sched(dur, {
 			node.release(0, lat, freq)
 		});
 		^node
@@ -269,15 +270,17 @@ Voicer {		// collect and manage voicer nodes
 
 		// gate one or many
 	gate { arg freq, dur, gate = 1, args, lat = -1;
-		var nodecoll;
+		var nodecoll, cl;
 		(lat ? 0).isNegative.if({ lat = latency });
 		(freq.size > 0).if({
 			nodecoll = this.trigger(freq, gate ? 1, args, lat);  // play them
 				// if single dur, convert to array
 			(dur.size > 0).not.if({ dur = [dur] });
+			cl = clock ? thisThread.clock;
 			nodecoll.do({		// schedule releases
 				arg node, i;
-				(clock ? thisThread.clock).sched(dur.wrapAt(i), {
+				node.releaseTime = cl.beats2secs(cl.beats + dur.wrapAt(i));
+				cl.sched(dur.wrapAt(i), {
 					node.release(0, lat, freq.wrapAt(i))
 				});
 			});
@@ -313,9 +316,110 @@ Voicer {		// collect and manage voicer nodes
 		});
 	}
 
+	releaseSustainingBefore { |seconds(thisThread.seconds), lat = -1, includeAll = false|
+		if((lat ?? { 0 }).isNegative) { lat = latency };
+		nodes.do { |node|
+			if(node.isPlaying and: {
+				node.isReleasing.not and: {
+					node.lastTrigger < seconds and: {
+						includeAll or: { node.releaseTime.isNil }
+					}
+				}
+			}) {
+				node.release(latency: lat)
+			};
+		}
+	}
+
 	releaseAll { |lat|
+		if((lat ?? { 0 }).isNegative) { lat = latency };
 		nodes.do({ arg n; n.release(latency: lat) });
 		susPedalNodes = IdentitySet.new;
+	}
+
+	// articulation support
+	findPrevious { |seconds|
+		^nodes.select { |node|
+			node.isPlaying and: { node.isReleasing.not and: {
+				node.releaseTime.isNil and: {
+					node.lastTrigger < seconds
+				}
+			} }
+		}
+		.maxItem { |node| node.lastTrigger }  // return latest
+	}
+
+	articulate1 { |freq, dur, gate = 1, args, lat = -1, slur(true), seconds|
+		if(seconds.isNil) { seconds = thisThread.seconds };
+		^this.prArticulate1(this.findPrevious(seconds), freq, dur, gate, args, lat, slur, seconds)
+	}
+
+	articulate { |freq, dur, gate = 1, args, lat = -1, slur(true), seconds|
+		if((lat ?? { 0 }).isNegative) { lat = latency };
+		if(freq.size == 0) {
+			^this.articulate1(freq, dur, gate, args, lat, slur, seconds)
+		} {
+			dur = dur.asArray;
+			^freq.asArray.collect { |f, i|
+				this.articulate1(f, dur.wrapAt(i), gate, args, lat, slur, seconds)
+			}
+		}
+	}
+
+	// assumes you have already found the previous node
+	// mainly for Event support
+	prArticulate1 { |prev, freq, dur, gate = 1, args, lat = -1, slur(true), seconds|
+		var steal, cl = clock ? thisThread.clock,
+		gateFunc = {
+			if(dur.notNil) {
+				this.gate1(freq, dur, gate, args, lat);
+			} {
+				this.trigger1(freq, gate, args, lat);
+			}
+		};
+		if((lat ?? { 0 }).isNegative) { lat = latency };
+		if(seconds.isNil) { seconds = cl.seconds };
+		if(prev.notNil) {
+			// release-and-trigger if: not slurring OR prev is not playing
+			if(prev.isPlaying and: { prev.isReleasing.not and: { slur and: { prev.releaseTime.isNil } } }) {
+				prev.set(args ++ [freq: freq], lat);
+				prev.frequency = freq;
+				prev.lastTrigger = cl.seconds;
+			} {
+				prev.release(latency: lat);
+				steal = prev.steal;
+				prev.steal = false;
+				prev.trigger(freq, gate, args, lat);
+				prev.steal = steal;
+			};
+			if(dur.notNil) {
+				prev.releaseTime = cl.seconds + dur;
+			} {
+				prev.releaseTime = nil;
+			};
+			^prev
+		} {
+			// no previous node, trigger a new one
+			^gateFunc.value
+		}
+	}
+
+	prGetArticNodes { |numNodes, seconds|
+		var	n;
+		if(seconds.isNil) { seconds = (clock ?? { TempoClock.default }).seconds };
+		n = nodes.select { |node|
+			node.isPlaying and: { node.isReleasing.not and: {
+				node.releaseTime.isNil and: {
+					node.lastTrigger < seconds
+				}
+			} }
+		}.sort { |a, b| a.lastTrigger < b.lastTrigger }
+		.keep(numNodes);
+		n.do { |node| node.reserved = true };
+		if(n.size < numNodes) {
+			n = n ++ this.prGetNodes(numNodes - n.size);
+		};
+		^n
 	}
 
 // suspednodes?

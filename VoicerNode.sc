@@ -10,6 +10,7 @@ SynthVoicerNode {
 		<reserved = false,
 		<>frequency,				// so voicer can identify notes to release
 		<>lastTrigger = 0,			// ditto -- time of last trigger
+		<releaseTime,				// expected release time, if known
 		<>target, <>addAction,		// for allocating nodes
 		<>bus,				// output bus to pass to things
 		<synth, 		// the node
@@ -123,6 +124,7 @@ SynthVoicerNode {
 					(syn == synth).if({
 						reserved = isPlaying = isReleasing = false;
 						synth = nil;
+						this.releaseTime = nil;
 					});
 					syn.releaseDependants;	// remove node and Updater from dependants dictionary
 				});
@@ -153,6 +155,14 @@ SynthVoicerNode {
 		});
 	}
 
+	releaseTime_ { |seconds|
+		if(seconds.isNil or: { (seconds < inf).not }) {
+			releaseTime = nil  // inf releaseTime --> nil
+		} {
+			releaseTime = seconds
+		}
+	}
+
 	releaseMsg { arg gate = 0;
 		^[#[error, -1], [15, synth.nodeID, \gate, gate], #[error, -2]]
 	}
@@ -170,6 +180,7 @@ SynthVoicerNode {
 			synth.server.listSendBundle(latency, this.releaseMsg(gate));
 			this.isPlaying = false;
 			isReleasing = true;
+			this.releaseTime = nil;
 		});
 	}
 
@@ -367,7 +378,7 @@ InstrVoicerNode : SynthVoicerNode {
 			(msg == \n_end).if({
 				(syn == synth).if({
 					reserved = isPlaying = isReleasing = false;
-					synth = nil;
+					synth = releaseTime = nil;
 				});
 				syn.releaseDependants;	// remove node and Updater from dependants dictionary
 			});
@@ -385,6 +396,7 @@ InstrVoicerNode : SynthVoicerNode {
 			this.target.server.listSendBundle(latency, this.releaseMsg(gate));
 			this.isPlaying = false;
 			isReleasing = true;
+			releaseTime = nil;
 		});
 	}
 

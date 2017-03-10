@@ -21,7 +21,7 @@ MonoPortaSynthVoicerNode : SynthVoicerNode {
 							// synth may have changed
 						(syn == synth).if({
 							isPlaying = isReleasing = false;
-							synth = nil;
+							synth = releaseTime = nil;
 						});
 						syn.releaseDependants;
 					});
@@ -102,7 +102,7 @@ MonoPortaInstrVoicerNode : InstrVoicerNode {
 							// synth may have changed
 						(syn == synth).if({
 							isPlaying = isReleasing = false;
-							synth = nil;
+							synth = releaseTime = nil;
 						});
 						syn.releaseDependants;
 					});
