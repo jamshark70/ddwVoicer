@@ -711,7 +711,7 @@ Voicer {		// collect and manage voicer nodes
 		StartUp.add {
 			Event.parentEvents.put(\voicerMIDI, (args: [],
 
-					// maybe you want to use non-equal-temperament. write it here
+				// maybe you want to use non-equal-temperament. write it here
 				midiNoteToFreq: #{ |notenum|
 					notenum.midicps
 				},
@@ -723,19 +723,19 @@ Voicer {		// collect and manage voicer nodes
 						{ ~freq = ~freq.asArray });
 					~dur = ~dur ?? { ~delta ?? { ~note.dur } };
 					~length = (~length ? ~note.length).asArray;
-						// some patterns (e.g. Pfindur) might shorten the delta
-						// in which case length could be too long
-						// but this really applies only to MonoPortaVoicers,
-						// hence the adjust... test
+					// some patterns (e.g. Pfindur) might shorten the delta
+					// in which case length could be too long
+					// but this really applies only to MonoPortaVoicers,
+					// hence the adjust... test
 					if(~adjustLengthToRealDelta.value and: { ~dur != currentEnvironment.delta }) {
 						~length = ~length * currentEnvironment.delta / ~dur;
 					};
 					~args = ~args ? ~note.args;
 					~gate = (~gate ?? {
-							// identify the \gate, xxx pair in the args array
-							// 2nd removeAt should return the value *wink*
+						// identify the \gate, xxx pair in the args array
+						// 2nd removeAt should return the value *wink*
 						(i = ~args.detectIndex({ |item| item == \gate })).notNil
-							.if({ ~args.removeAt(i); ~args.removeAt(i); }, { 0.5 });
+						.if({ ~args.removeAt(i); ~args.removeAt(i); }, { 0.5 });
 					}).asArray;
 
 					~nodes = ~voicer.prGetNodes(max(~freq.size, max(~length.size, ~gate.size)));
@@ -744,7 +744,7 @@ Voicer {		// collect and manage voicer nodes
 
 				play: #{
 					var	lag, timingOffset = ~timingOffset ? 0, releaseGate,
-						voicer = ~voicer;
+					voicer = ~voicer;
 					voicer.notNil.if({
 						lag = ~latency;
 						~prepNote.value;
@@ -769,13 +769,13 @@ Voicer {		// collect and manage voicer nodes
 					});
 					~delta ?? { ~delta = ~dur };
 				},
-					// you could override this
+				// you could override this
 				adjustLengthToRealDelta: { ~voicer.isKindOfByName(\MonoPortaVoicer) }
 			));
 
 			Event.addEventType(\voicerNote, #{|server|
 				var	lag, strum, sustain, i, timingOffset = ~timingOffset ? 0, releaseGate,
-					voicer = ~voicer;
+				voicer = ~voicer;
 
 				if(voicer.notNil and: { currentEnvironment.isRest.not }) {
 					~freq = (~freq.value + ~detune).asArray;
@@ -783,17 +783,17 @@ Voicer {		// collect and manage voicer nodes
 					lag = ~lag;
 					strum = ~strum;
 					sustain = ~sustain = ~sustain.value.asArray;
-						// for mono voicers, adjust sustain if note's delta is altered
+					// for mono voicers, adjust sustain if note's delta is altered
 					if(voicer.isKindOfByName(\MonoPortaVoicer)
-					and: { ~dur != currentEnvironment.delta }) {
+						and: { ~dur != currentEnvironment.delta }) {
 						~sustain = max(0.01, ~sustain * currentEnvironment.delta / ~dur);
 					};
 
 					~gate = (~gate ?? {
-							// identify the \gate, xxx pair in the args array
-							// 2nd removeAt should return the value *wink*
+						// identify the \gate, xxx pair in the args array
+						// 2nd removeAt should return the value *wink*
 						(i = ~args.detectIndex({ |item| item == \gate })).notNil
-							.if({ ~args.removeAt(i); ~args.removeAt(i); }, { 0.5 });
+						.if({ ~args.removeAt(i); ~args.removeAt(i); }, { 0.5 });
 					}).asArray;
 					releaseGate = (~releaseGate ? 0).asArray;
 
@@ -804,8 +804,8 @@ Voicer {		// collect and manage voicer nodes
 						var latency, freq, length;
 
 						latency = lag;
-							// backward compatibility: I should NOT add server latency
-							// for newer versions with Julian's schedbundle method
+						// backward compatibility: I should NOT add server latency
+						// for newer versions with Julian's schedbundle method
 						if(~addServerLatencyToLag ? false) {
 							latency = latency + (node.server.latency ? 0)
 						};
@@ -825,6 +825,84 @@ Voicer {		// collect and manage voicer nodes
 							});
 						});
 					});
+				};
+			});
+
+			Event.addEventType(\voicerArticOverlap, #{|server|
+				var	lag, strum, sustain, delta, i, timingOffset = ~timingOffset ? 0, releaseGate,
+				voicer = ~voicer,
+				seconds = thisThread.seconds;
+
+				if(voicer.notNil and: { currentEnvironment.isRest.not }) {
+					~freq = (~freq.value + ~detune).asArray;
+					~amp = ~amp.value.asArray;
+					lag = ~lag;
+					strum = ~strum;
+					sustain = ~sustain = ~sustain.value.asArray;
+					delta = currentEnvironment.delta;
+					if(voicer.isKindOfByName(\MonoPortaVoicer)
+						and: { ~dur != currentEnvironment.delta }) {
+						~sustain = max(0.01, ~sustain * currentEnvironment.delta / ~dur);
+					};
+
+					~gate = (~gate ?? {
+						// identify the \gate, xxx pair in the args array
+						// 2nd removeAt should return the value *wink*
+						(i = ~args.detectIndex({ |item| item == \gate })).notNil
+						.if({ ~args.removeAt(i); ~args.removeAt(i); }, { 0.5 });
+					}).asArray;
+					releaseGate = (~releaseGate ? 0).asArray;
+
+					~nodes = voicer.perform(
+						if(~forceNew == true) { \prGetNodes } { \prGetArticNodes },
+						max(~freq.size, max(~sustain.size, ~gate.size)),
+						seconds
+					);
+					voicer.setArgsInEvent(currentEnvironment);
+
+					~nodes.do({ |node, i|
+						var latency, freq, length;
+
+						latency = lag;
+						// backward compatibility: I should NOT add server latency
+						// for newer versions with Julian's schedbundle method
+						if(~addServerLatencyToLag ? false) {
+							latency = latency + (node.server.latency ? 0)
+						};
+						freq = ~freq.wrapAt(i);
+						length = ~sustain.wrapAt(i);
+
+						~schedBundleArray.(latency, ~timingOffset + (i * strum),
+							node.server,
+							node.server.makeBundle(false, {
+								if(~forceNew == true) {
+									node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i));
+								} {
+									voicer.prArticulate1(node, freq, nil, ~gate.wrapAt(i), ~args.wrapAt(i),
+										slur: ~accent != true, seconds: seconds
+									);
+								};
+							})
+						);
+						if(length.notNil and: { length != inf }) {
+							node.releaseTime = thisThread.clock.beats2secs(
+								(thisThread.beats + length + timingOffset + (i * strum))
+							);
+							thisThread.clock.sched(length + timingOffset + (i * strum), {
+								voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
+									node.server.latency.notNil.if({ lag + node.server.latency }));
+							});
+						} {
+							node.releaseTime = nil;  // nil length or inf = ok to be rearticulated
+						};
+					});
+				};
+			});
+
+			Event.addEventType(\voicerArtic, { |server|
+				if(~voicer.notNil and: { currentEnvironment.isRest.not }) {
+					~eventTypes[\voicerArticOverlap].value(server);
+					~voicer.releaseSustainingBefore(thisThread.seconds, server.latency);
 				};
 			});
 		}
