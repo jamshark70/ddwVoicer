@@ -356,7 +356,8 @@ Voicer {		// collect and manage voicer nodes
 					// but keys set in the local event should take precedence
 				eventWithoutParent = currentEnvironment.copy.parent_(nil),
 				argsDict = IdentityDictionary.new;
-			~args = ~args.asArray;
+			// Event.default.parent's ~args is totally wrong for this usage
+			~args = eventWithoutParent[\args].asArray;
 			~args.tryPerform(\pairsDo) { |key, value|
 				argsDict.put(key, value);
 			};
