@@ -346,7 +346,7 @@ Voicer {		// collect and manage voicer nodes
 				}
 			} }
 		}
-		.maxItem { |node| node.lastTrigger }  // return latest
+		.minItem { |node| node.lastTrigger }  // return earliest
 	}
 
 	articulate1 { |freq, dur, gate = 1, args, lat = -1, slur(true), seconds|
