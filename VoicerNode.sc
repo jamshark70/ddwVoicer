@@ -111,6 +111,10 @@ SynthVoicerNode {
 			});
 			bundle = this.triggerMsg(freq, gate, args);
 			target.server.listSendBundle(myLastLatency = latency, bundle);
+			// 'this' would exist in susPedalNodes if it was released while susPedal = on
+			// if we re-trigger it during that time, it's no longer 'released'
+			// so we must remove it from the susPedalNodes collection
+			voicer.susPedalNodes.remove(this);
 			NodeWatcher.register(synth);
 				// when the synth node dies, I need to set my flags
 			Updater(synth, { |syn, msg|
@@ -340,6 +344,7 @@ InstrVoicerNode : SynthVoicerNode {
 			});
 			bundle = bundle ++ this.triggerMsg(freq, gate, args);
 			target.server.listSendBundle(myLastLatency = latency, bundle);
+			voicer.susPedalNodes.remove(this);
 
 			frequency = freq;
 			lastTrigger = thisThread.seconds;

@@ -110,6 +110,7 @@ MonoPortaInstrVoicerNode : InstrVoicerNode {
 			});
 
 			target.server.listSendBundle(myLastLatency = latency, bundle);
+			voicer.susPedalNodes.remove(this);
 
 			frequency = freq;
 			voicer.lastFreqs.add(freq);
