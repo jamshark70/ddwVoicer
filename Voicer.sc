@@ -202,6 +202,14 @@ Voicer {		// collect and manage voicer nodes
 		^this.nonplaying.maxItem(_.lastTrigger)
 	}
 
+	preferSameFreq { |freq|
+		if(freq.isNil) {
+			^this.preferEarly
+		} {
+			^nodes.detect { |n| n.frequency == freq } ?? { this.preferEarly }
+		}
+	}
+
 // PLAYING/RELEASING METHODS:
 // trigger plays, release kills a node by frequency, gate starts and schedules the release
 		// lat -1 means use value defined in the voicer
@@ -209,7 +217,7 @@ Voicer {		// collect and manage voicer nodes
 		var node;
 			// freq may be a symbol to produce a rest
 		freq.isValidVoicerArg.if({
-			node = this.perform(stealer);
+			node = this.perform(stealer, freq);
 				// args may be [\key, value] or [[\key, value], [\key, value]]
 				// in the latter case, trigger1 should take only the first subarray
 			node.trigger(freq, gate,
@@ -235,7 +243,7 @@ Voicer {		// collect and manage voicer nodes
 				// for each freq, get node and play it
 			^freq.collect({ arg f, i;
 				f.isValidVoicerArg.if({
-					this.perform(stealer).trigger(f, gate.wrapAt(i), args.wrapAt(i), lat);
+					this.perform(stealer, f).trigger(f, gate.wrapAt(i), args.wrapAt(i), lat);
 				});
 			});
 		}, {
