@@ -206,7 +206,11 @@ Voicer {		// collect and manage voicer nodes
 		if(freq.isNil) {
 			^this.preferEarly
 		} {
-			^nodes.detect { |n| n.frequency == freq } ?? { this.preferEarly }
+			^nodes.detect { |n|
+				n.isPlaying and: { n.isReleasing.not and: {
+					n.frequency == freq
+				} }
+			} ?? { this.preferEarly }
 		}
 	}
 
