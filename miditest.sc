@@ -2,7 +2,7 @@
 + Instr {
 	miditest { arg channel = 0, initArgs, target, bus, ctlChannel, makeVoicerFunc, excludeCtls;
 		var voicer, socket, patch, synthdef, layout, argsSize, parg, i, argNames;
-		
+
 		var close = {
 			var	gctemp;
 			voicer.active.if({
@@ -10,7 +10,7 @@
 					// must free midi controls in reverse order
 					// globalControls is an IdentityDictionary, so this is the only way
 				gctemp = Array.new(voicer.globalControls.size);
-	
+
 				voicer.globalControlsByCreation.do({ arg gc;
 					gctemp.add(gc);
 					Post << $\\ << gc.name << ", " << gc.value << ", \n";
@@ -33,7 +33,7 @@
 		channel = channel ? 0;
 			// can have controllers on a different midi channel (or different device)
 		ctlChannel = ctlChannel ? channel;
-		
+
 			// make the player
 		voicer = makeVoicerFunc.(this, initArgs, target: target, bus: bus)
 			?? { Voicer.new(20, this, initArgs, target: target, bus: bus) };
@@ -77,7 +77,7 @@
 
 		layout = voicer.gui.masterLayout;
 		layout.onClose = close;
-		
+
 		// now user can play
 		"\n\nTry your Instr using your midi keyboard. Arguments have been routed as shown".postln;
 		"in the console window.".postln;
@@ -89,11 +89,17 @@
 			MonoPortaVoicer(1, instr, initArgs, bus, target)
 		}, excludeCtls);
 	}
-	
+
 	openFile {
-		this.path.openTextFile;
+		var str = this.path;
+		if(str.respondsTo(\openDocument)) {
+			str.openDocument;
+		} {
+			// this method is deprecated... use it only if openDocument isn't found
+			str.openTextFile;
+		}
 	}
-	
+
 }
 
 
@@ -107,13 +113,13 @@
 + SynthDef {
 	miditest { arg channel = 0, specs, target, bus, ctlChannel, makeVoicerFunc;
 		var voicer, socket, patch, spec, name, layout, cnames, md;
-		
+
 		var close = {
 			var gctemp;
 			voicer.active.if({
 				"\n\nTest ended. Last settings of global controls:".postln;
 				gctemp = Array.new(voicer.globalControls.size);
-	
+
 				voicer.globalControlsByCreation.do({ arg gc;
 					gctemp.add(gc);
 					Post << $\\ << gc.name << ", " << gc.value << ", \n";
@@ -138,16 +144,16 @@
 		ctlChannel = ctlChannel ? channel;
 
 		this.send(target.asTarget.server);	// tell the server about me
-		
+
 			// make the player
 		voicer = makeVoicerFunc.(this.name, #[], target: target, bus: bus)
 			?? { Voicer.new(20, this.name, target: target, bus: bus) };
 		socket = VoicerMIDISocket.new(channel, voicer);  // plug into MIDI
-		
+
 			// make guis for controls other than freq and gate
 			// first get the InstrSynthDef
 			// how to exempt args? provide non-SimpleNumber in initArgs
-		
+
 			// now make midi controllers
 			// use (midiControls: #[name0, name1...]) to choose which controls get midified
 			// otherwise it's all of them
@@ -191,13 +197,13 @@
 				});
 			});
 		});
-		
+
 			// make stop button
 		voicer.addProcess([["Stop test", close]], \toggle);  // so it's a button not a menu
 
 		layout = voicer.gui.masterLayout;
 		layout.onClose = close;
-		
+
 		// now user can play
 		"\n\nTry your SynthDef using your midi keyboard. Arguments have been routed as shown".postln;
 		"in the console window.".postln;
