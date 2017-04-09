@@ -13,3 +13,8 @@ At a later date, I may add examples. For now, I'm adding the README for a specif
 - The **topic/rearticulation** branch contains experimental code to support pitch-generation processes in https://github.com/jamshark70/ddwChucklib-livecode. This branch is somewhat well-tested at this point and is not likely to change dramatically, *but* I don't consider it stable as yet.
 
 If you are using ddwChucklib-livecode, I recommend that you check out the rearticulation branch. Otherwise, stick with master.
+
+I believe you can do it like this, assuming you've cloned this repository.
+
+    git fetch origin
+    git checkout topic/rearticulation
