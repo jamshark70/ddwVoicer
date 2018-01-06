@@ -902,6 +902,8 @@ Voicer {		// collect and manage voicer nodes
 			Event.addEventType(\voicerArtic, { |server|
 				if(~voicer.notNil and: { currentEnvironment.isRest.not }) {
 					~eventTypes[\voicerArticOverlap].value(server);
+				};
+				if(currentEnvironment[\initialRest] != true) {
 					~voicer.releaseSustainingBefore(thisThread.seconds, server.latency);
 				};
 			});
