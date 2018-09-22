@@ -762,7 +762,7 @@ Voicer {		// collect and manage voicer nodes
 								})
 							);
 							(length.notNil and: { length != inf }).if({
-								thisThread.clock.sched(length + timingOffset, {
+								(~clock ?? { thisThread.clock }).sched(length + timingOffset, {
 									voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
 										node.server.latency.notNil.if({ lag + node.server.latency }));
 								});
@@ -821,7 +821,7 @@ Voicer {		// collect and manage voicer nodes
 							})
 						);
 						(length.notNil and: { length != inf }).if({
-							thisThread.clock.sched(length + timingOffset + (i * strum), {
+							(~clock ?? { thisThread.clock }).sched(length + timingOffset + (i * strum), {
 								voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
 									node.server.latency.notNil.if({ lag + node.server.latency }));
 							});
@@ -833,7 +833,7 @@ Voicer {		// collect and manage voicer nodes
 			Event.addEventType(\voicerArticOverlap, #{|server|
 				var	lag, strum, sustain, delta, i, timingOffset = ~timingOffset ? 0, releaseGate,
 				voicer = ~voicer,
-				seconds = thisThread.seconds;
+				seconds = if(~clock.notNil) { ~clock.seconds } { thisThread.seconds };
 
 				if(voicer.notNil and: { currentEnvironment.isRest.not }) {
 					~freq = (~freq.value + ~detune).asArray;
@@ -887,10 +887,12 @@ Voicer {		// collect and manage voicer nodes
 							})
 						);
 						if(length.notNil and: { length != inf }) {
-							node.releaseTime = thisThread.clock.beats2secs(
-								(thisThread.beats + length + timingOffset + (i * strum))
+							node.releaseTime = (~clock ?? { thisThread.clock }).beats2secs(
+								(
+									(if(~clock.notNil) { ~clock.beats } { thisThread.beats })
+									+ length + timingOffset + (i * strum))
 							);
-							thisThread.clock.sched(length + timingOffset + (i * strum), {
+							(~clock ?? { thisThread.clock }).sched(length + timingOffset + (i * strum), {
 								voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
 									node.server.latency.notNil.if({ lag + node.server.latency }));
 							});
@@ -907,7 +909,10 @@ Voicer {		// collect and manage voicer nodes
 						~eventTypes[\voicerArticOverlap].value(server);
 					};
 					if(currentEnvironment[\initialRest] != true) {
-						~voicer.releaseSustainingBefore(thisThread.seconds, server.latency);
+						~voicer.releaseSustainingBefore(
+							if(~clock.notNil) { ~clock.seconds } { thisThread.seconds },
+							server.latency
+						);
 					};
 				};
 			});
