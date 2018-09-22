@@ -555,6 +555,7 @@ Voicer {		// collect and manage voicer nodes
 		if(globalControls[name].isNil) {
 			globalControls.put(name, gc = VoicerGlobalControl.new(name, bus, this,
 				value ? 0, spec, allowGUI));
+			this.changed(\addedGlobalControl, gc);
 			^gc		// so user can reference this gc directly
 		} {
 			^globalControls[name]
@@ -568,6 +569,7 @@ Voicer {		// collect and manage voicer nodes
 		gc.notNil.if({		// make sure there's something to remove
 			globalControls.removeAt(name);
 			gc.free;
+			this.changed(\removedGlobalControl, gc);
 		});
 	}
 
