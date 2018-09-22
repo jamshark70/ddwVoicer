@@ -316,7 +316,7 @@ Voicer {		// collect and manage voicer nodes
 		});
 	}
 
-	releaseSustainingBefore { |seconds(thisThread.seconds), lat = -1, includeAll = false|
+	releaseSustainingBefore { |seconds(SystemClock.seconds), lat = -1, includeAll = false|
 		if((lat ?? { 0 }).isNegative) { lat = latency };
 		nodes.do { |node|
 			if(node.isPlaying and: {
@@ -350,7 +350,7 @@ Voicer {		// collect and manage voicer nodes
 	}
 
 	articulate1 { |freq, dur, gate = 1, args, lat = -1, slur(true), seconds|
-		if(seconds.isNil) { seconds = thisThread.seconds };
+		if(seconds.isNil) { seconds = SystemClock.seconds };
 		^this.prArticulate1(this.findPrevious(seconds), freq, dur, gate, args, lat, slur, seconds)
 	}
 
@@ -378,13 +378,13 @@ Voicer {		// collect and manage voicer nodes
 			}
 		};
 		if((lat ?? { 0 }).isNegative) { lat = latency };
-		if(seconds.isNil) { seconds = cl.seconds };
+		if(seconds.isNil) { seconds = SystemClock.seconds };
 		if(prev.notNil) {
 			// release-and-trigger if: not slurring OR prev is not playing
 			if(prev.isPlaying and: { prev.isReleasing.not and: { slur and: { prev.releaseTime.isNil } } }) {
 				prev.set(args ++ [freq: freq], lat);
 				prev.frequency = freq;
-				prev.lastTrigger = cl.seconds;
+				prev.lastTrigger = SystemClock.seconds;
 			} {
 				prev.release(-1.008, latency: lat);  // -1 to suppress previous release envelope
 				steal = prev.steal;
@@ -393,7 +393,10 @@ Voicer {		// collect and manage voicer nodes
 				prev.steal = steal;
 			};
 			if(dur.notNil) {
-				prev.releaseTime = cl.seconds + dur;
+				// seconds + beats makes no sense
+				// previously it was "cl.seconds + dur"
+				// which also makes no sense, so at least it's not worse
+				prev.releaseTime = SystemClock.seconds + dur;
 			} {
 				prev.releaseTime = nil;
 			};
@@ -406,7 +409,7 @@ Voicer {		// collect and manage voicer nodes
 
 	prGetArticNodes { |numNodes, seconds|
 		var	n;
-		if(seconds.isNil) { seconds = (clock ?? { TempoClock.default }).seconds };
+		if(seconds.isNil) { seconds = SystemClock.seconds };
 		n = nodes.select { |node|
 			node.isPlaying and: { node.isReleasing.not and: {
 				node.releaseTime.isNil and: {
@@ -833,7 +836,7 @@ Voicer {		// collect and manage voicer nodes
 			Event.addEventType(\voicerArticOverlap, #{|server|
 				var	lag, strum, sustain, delta, i, timingOffset = ~timingOffset ? 0, releaseGate,
 				voicer = ~voicer,
-				seconds = if(~clock.notNil) { ~clock.seconds } { thisThread.seconds };
+				seconds = SystemClock.seconds;
 
 				if(voicer.notNil and: { currentEnvironment.isRest.not }) {
 					~freq = (~freq.value + ~detune).asArray;
@@ -909,10 +912,7 @@ Voicer {		// collect and manage voicer nodes
 						~eventTypes[\voicerArticOverlap].value(server);
 					};
 					if(currentEnvironment[\initialRest] != true) {
-						~voicer.releaseSustainingBefore(
-							if(~clock.notNil) { ~clock.seconds } { thisThread.seconds },
-							server.latency
-						);
+						~voicer.releaseSustainingBefore(SystemClock.seconds, server.latency);
 					};
 				};
 			});
@@ -978,7 +978,7 @@ MonoPortaVoicer : Voicer {
 		(lat ? 0).isNegative.if({ lat = latency });
 		lastFreqs.remove(freq);
 		(lastFreqs.size > 0
-		and: { thisThread.seconds > node.lastTrigger }).if({
+		and: { SystemClock.seconds > node.lastTrigger }).if({
 			if(node.frequency != lastFreqs.last) {
 				nodes.at(0).set([\freq, lastFreqs.last], lat);
 				nodes.at(0).frequency = lastFreqs.last;

@@ -130,7 +130,7 @@ SynthVoicerNode {
 				});
 			});
 			frequency = freq;	// save frequency for Voicer.release
-			lastTrigger = thisThread.seconds;	// save time
+			lastTrigger = SystemClock.seconds;	// save time
 			this.isPlaying = true;
 			isReleasing = false;
 		} {
@@ -144,7 +144,7 @@ SynthVoicerNode {
 
 	shouldSteal {
 		^steal and: { isPlaying or: { synth.notNil and: { synth.isPlaying } }
-		or: { thisThread.seconds - lastTrigger < (myLastLatency ? 0) } }
+		or: { SystemClock.seconds - lastTrigger < (myLastLatency ? 0) } }
 	}
 
 		// must pass in node because, when a node is stolen, my synth variable has changed
@@ -195,7 +195,7 @@ SynthVoicerNode {
 	}
 	reserved_ { |bool = false|
 		reserved = bool;
-		if(bool) { lastTrigger = thisThread.seconds };
+		if(bool) { lastTrigger = SystemClock.seconds };
 	}
 
 	shouldRelease { arg freq;
@@ -359,7 +359,7 @@ InstrVoicerNode : SynthVoicerNode {
 			voicer.susPedalNodes.remove(this);
 
 			frequency = freq;
-			lastTrigger = thisThread.seconds;
+			lastTrigger = SystemClock.seconds;
 		} {
 			reserved = false;
 		}
