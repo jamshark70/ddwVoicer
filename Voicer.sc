@@ -386,7 +386,7 @@ Voicer {		// collect and manage voicer nodes
 				prev.frequency = freq;
 				prev.lastTrigger = cl.seconds;
 			} {
-				prev.release(latency: lat);
+				prev.release(-1.008, latency: lat);  // -1 to suppress previous release envelope
 				steal = prev.steal;
 				prev.steal = false;
 				prev.trigger(freq, gate, args, lat);

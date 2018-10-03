@@ -10,7 +10,7 @@ MonoPortaSynthVoicerNode : SynthVoicerNode {
 					\gate, gate, \t_gate, gate] ++ args);
 			}, {
 				isReleasing.if({
-					bundle = this.releaseMsg(-1.02);	// quick release
+					bundle = this.releaseMsg(-1.008);	// quick release
 				});
 					// triggerMsg() sets the synth instance var
 				bundle = bundle ++ this.triggerMsg(freq, gate, args ++ [\freqlag, voicer.portaTime]);
@@ -92,7 +92,7 @@ MonoPortaInstrVoicerNode : InstrVoicerNode {
 					\gate, gate, \t_gate, gate] ++ args);
 			}, {
 				isReleasing.if({
-					bundle = this.releaseMsg(-1.02);	// quick release
+					bundle = this.releaseMsg(-1.008);	// quick release
 				});
 				bundle = bundle ++ this.triggerMsg(freq, gate, args ++ [\freqlag, voicer.portaTime]);
 				NodeWatcher.register(synth);

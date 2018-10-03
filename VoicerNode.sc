@@ -150,8 +150,9 @@ SynthVoicerNode {
 		// must pass in node because, when a node is stolen, my synth variable has changed
 		// to the new node, not the old one that should go away
 	stealNode { |node, latency|
+		"stealing".debug;
 		(synth.notNil/* and: { synth.isPlaying }*/).if({
-			node.server.sendBundle(latency, #[error, -1], node.setMsg(\gate, -1), #[error, -2]);
+			node.server.sendBundle(latency, #[error, -1], node.setMsg(\gate, -1.008), #[error, -2]);
 		});
 	}
 
@@ -201,7 +202,7 @@ SynthVoicerNode {
 		^(this.isPlaying and: { freq.isNil or: { freq == frequency } })
 	}
 
-	releaseNow { arg sec = 0;	// release immediately using linear decay
+	releaseNow { arg sec = 0.008;	// release immediately using linear decay
 		this.release(sec.abs.neg - 1);	// -1 = instant decay, -0.5-1 = -1.5 = .5 sec decay
 	}
 
