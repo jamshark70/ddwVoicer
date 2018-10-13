@@ -143,14 +143,26 @@ SynthVoicerNode {
 	// }
 
 	shouldSteal {
-		^steal and: { isPlaying or: { synth.notNil and: { synth.isPlaying } }
-		or: { SystemClock.seconds - lastTrigger < (myLastLatency ? 0) } }
+		^steal and: {
+			isPlaying or: {
+				synth.notNil and: {
+					synth.isPlaying or: {
+						// you might trigger a node, then very quickly trigger it again,
+						// within the latency window. In that case, the 'synth' might not
+						// *currently* be playing, but it will be playing by the time
+						// the second .trigger should happen in the server.
+						// but 'synth' should be non-nil in that case
+						SystemClock.seconds - lastTrigger < (myLastLatency ? 0)
+					}
+				}
+			}
+		}
 	}
 
-		// must pass in node because, when a node is stolen, my synth variable has changed
-		// to the new node, not the old one that should go away
+	// must pass in (synth) node because, when a node is stolen, my synth variable has changed
+	// to the new node, not the old one that should go away
 	stealNode { |node, latency|
-		"stealing".debug;
+		// [synth, node, node.isPlaying, voicer.nodes.count(_.isPlaying)].debug("stealing: new synth, old synth, old is playing, number of playing voicer nodes");
 		(synth.notNil/* and: { synth.isPlaying }*/).if({
 			node.server.sendBundle(latency, #[error, -1], node.setMsg(\gate, -1.008), #[error, -2]);
 		});
