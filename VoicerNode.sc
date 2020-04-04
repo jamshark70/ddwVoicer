@@ -66,7 +66,7 @@ SynthVoicerNode {
 			out = Array(initArgDict.size * 2);
 			initArgDict.keysValuesDo({ |name, value| out.add(name).add(value) });
 		});
-		^out.asOSCArgArray
+		^out
 	}
 
 	makeInitArgDict { |initArgs|
