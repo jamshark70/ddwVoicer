@@ -1,28 +1,28 @@
 
 SynthVoicerNode {
-		// one voice of a Voicer
-		// this one handles standard synthdefs
-		// for other types, subclass SynthVoicerNode and override methods
-		// H. James Harkins, jamshark70@dewdrop-world.net
+	// one voice of a Voicer
+	// this one handles standard synthdefs
+	// for other types, subclass SynthVoicerNode and override methods
+	// H. James Harkins, jamshark70@dewdrop-world.net
 
 	var	isPlaying = false,
-		<>isReleasing = false,
-		<reserved = false,
-		<>frequency,				// so voicer can identify notes to release
-		<>lastTrigger = 0,			// ditto -- time of last trigger
-		<releaseTime,				// expected release time, if known
-		<>target, <>addAction,		// for allocating nodes
-		<>bus,				// output bus to pass to things
-		<synth, 		// the node
-		<initArgs,	// send to each node on initiation
-		<initArgDict,	// quicker access to initial arg values
-		<defname,
-		voicer,		// to help with globally mapped controls; what if voicer is nil?
-		<myLastLatency,	// because latency is now variable at the voicer level
-						// important because you may have 2 processes with different latencies
-						// using the same Voicer
-		<>steal = true;		// by default, if another note needs this object, its synth node can be killed
-						// false means let the node die on its own (you lose synth activity control)
+	<>isReleasing = false,
+	<reserved = false,
+	<>frequency,				// so voicer can identify notes to release
+	<>lastTrigger = 0,			// ditto -- time of last trigger
+	<releaseTime,				// expected release time, if known
+	<>target, <>addAction,		// for allocating nodes
+	<>bus,				// output bus to pass to things
+	<synth, 		// the node
+	<initArgs,	// send to each node on initiation
+	<initArgDict,	// quicker access to initial arg values
+	<defname,
+	voicer,		// to help with globally mapped controls; what if voicer is nil?
+	<myLastLatency,	// because latency is now variable at the voicer level
+	// important because you may have 2 processes with different latencies
+	// using the same Voicer
+	<>steal = true;		// by default, if another note needs this object, its synth node can be killed
+	// false means let the node die on its own (you lose synth activity control)
 
 	*new { arg thing, args, bus, target, addAction = \addToTail, voicer, defname;
 		target = target.asTarget;		// if nil, gives default server
@@ -34,14 +34,14 @@ SynthVoicerNode {
 		target = targ;		// save arguments
 		addAction = addAct;
 
-			// remove arg pairs from ar whose key is \freq, \gate or \outbus
+		// remove arg pairs from ar whose key is \freq, \gate or \outbus
 		initArgs = this.makeInitArgs(ar);
 		initArgDict = this.makeInitArgDict(initArgs);
 
 		voicer = par;
 		defname = th;
 
-			// use given bus or hardware output
+		// use given bus or hardware output
 		bus = b ? Bus.new(\audio, 0, 1, target.server);
 		^this
 	}
@@ -77,24 +77,24 @@ SynthVoicerNode {
 
 	initArgAt { |name| ^initArgDict[name.asSymbol] }
 
-		// this test is split out of the above in case future subclasses need a different test
+	// this test is split out of the above in case future subclasses need a different test
 	// testArgClass { |argValue| ^argValue.asTestUGenInput.isValidSynthArg }
 
 	triggerMsg { arg freq, gate = 1, args;
 		var bundle, args2;
-			// create osc message
+		// create osc message
 		bundle = List.new;
-			// assemble arguments
+		// assemble arguments
 		args2 = initArgs ++ [\gate, gate, \t_gate, gate];
-			// an arg could be a one-dimensional array
-			// but it shouldn't have more dimensions than that
+		// an arg could be a one-dimensional array
+		// but it shouldn't have more dimensions than that
 		args = (args ? []);
 		(1, 3 .. args.size-1).do { |i|
 			if(args[i].respondsTo(\flat)) { args[i] = args[i].flat };
 		};
 		(args.at(0).notNil).if({ args2 = args2 ++ args });
 		freq.notNil.if({ args2 = args2 ++ [\freq, freq] });
-			// make synth object
+		// make synth object
 		synth = Synth.basicNew(defname, target.server);
 		bundle.add(synth.newMsg(target, args2.asOSCArgArray ++ this.mapArgs
 			++ [\out, bus.index, \outbus, bus.index], addAction));
@@ -102,7 +102,7 @@ SynthVoicerNode {
 	}
 
 	triggerCallBack { ^nil }	// this is what OSCSchedule uses for its clientsidefunc
-							// InstrVoicerNode uses this
+	// InstrVoicerNode uses this
 
 	trigger { arg freq, gate = 1, args, latency;
 		var bundle;
@@ -117,10 +117,10 @@ SynthVoicerNode {
 			// so we must remove it from the susPedalNodes collection
 			voicer.susPedalNodes.remove(this);
 			NodeWatcher.register(synth);
-				// when the synth node dies, I need to set my flags
+			// when the synth node dies, I need to set my flags
 			Updater(synth, { |syn, msg|
 				(msg == \n_end).if({
-						// synth may have changed
+					// synth may have changed
 					(syn == synth).if({
 						reserved = isPlaying = isReleasing = false;
 						synth = nil;
@@ -184,10 +184,10 @@ SynthVoicerNode {
 		^nil
 	}
 
-		// release using Env's releaseNode
-		// freq argument is because scheduled releases may be talking to a node that's been stolen.
-		// In that case, the frequency will be different and the release should not happen.
-		// if left nil, the release will go ahead.
+	// release using Env's releaseNode
+	// freq argument is because scheduled releases may be talking to a node that's been stolen.
+	// In that case, the frequency will be different and the release should not happen.
+	// if left nil, the release will go ahead.
 	release { arg gate = 0, latency, freq;
 		this.shouldRelease(freq).if({
 			synth.server.listSendBundle(latency, this.releaseMsg(gate));
@@ -232,10 +232,10 @@ SynthVoicerNode {
 	setMsg { arg args;
 		var ar, bundle;
 		this.isPlaying.if({
-				// ignore global controls (handled by Voicer.set)
+			// ignore global controls (handled by Voicer.set)
 			args = (args ? []).clump(2)
-				.select({ arg a; voicer.globalControls.at(a.at(0).asSymbol).isNil })
-				.flatten(1);
+			.select({ arg a; voicer.globalControls.at(a.at(0).asSymbol).isNil })
+			.flatten(1);
 			^[[15, synth.nodeID] ++ args.asOSCArgArray]
 		}, {
 			^nil
@@ -255,12 +255,12 @@ SynthVoicerNode {
 		initArgs = this.makeInitArgs;
 	}
 
-		// nil if SynthDesc not found
+	// nil if SynthDesc not found
 	getSynthDesc { |synthLib|
 		^(synthLib ?? { SynthDescLib.global }).tryPerform(\at, defname.asSymbol)
 	}
 
-// GENERAL SUPPORT METHODS
+	// GENERAL SUPPORT METHODS
 	server { ^target.server }	// tell the outside world where I live
 
 	trace { this.isPlaying.if({ synth.trace }) }
@@ -273,7 +273,7 @@ SynthVoicerNode {
 
 	mapArgsMsg { // assumes synth is loaded
 		var mapMsg;
-			// if nothing's in the globalControls dictionary, no need to do anything
+		// if nothing's in the globalControls dictionary, no need to do anything
 		(voicer.globalControls.size > 0).if({
 			mapMsg = [14, synth.nodeID];	// message header
 			voicer.globalControls.keysValuesDo({ arg name, gc;
@@ -286,7 +286,7 @@ SynthVoicerNode {
 
 	mapArgs { // assumes synth is loaded
 		var out;
-			// if nothing's in the globalControls dictionary, no need to do anything
+		// if nothing's in the globalControls dictionary, no need to do anything
 		(voicer.globalControls.size > 0).if({
 			out = Array.new(voicer.globalControls.size * 2);
 			voicer.globalControls.keysValuesDo({ arg name, gc;
@@ -302,7 +302,7 @@ SynthVoicerNode {
 }
 
 InstrVoicerNode : SynthVoicerNode {
-		// children are InstrVoicerNodes for any sub-patches
+	// children are InstrVoicerNodes for any sub-patches
 	var	<patch, <instr, <children;
 
 	init { arg th, ar, b, targ, addAct, par, olddefname;
@@ -312,29 +312,29 @@ InstrVoicerNode : SynthVoicerNode {
 		instr = th;
 		voicer = par;
 		addAction = \addToTail;		// must always be so for compound patches
-			// use given bus or hardware output
+		// use given bus or hardware output
 		bus = b ? Bus.new(\audio, 0, 1, target.server);
 		olddefname.isNil.if({
 			patch = this.makePatch(instr, ar);
-				// cracky workaround for cxx's synthdef naming problem
-				// this breaks nested patches but I never use that anyway
+			// cracky workaround for cxx's synthdef naming problem
+			// this breaks nested patches but I never use that anyway
 			def = patch.asSynthDef;
 			def.name = (defname = def.name ++ UniqueID.next);
-				// this might not work with wrapped Instr's
+			// this might not work with wrapped Instr's
 			try {
 				def.perform(if(SynthDef.findRespondingMethodFor(\add).notNil)
 					{ \add } { \memStore })
 			} { |error|
-					error.notNil.if({
-						"Error occurred during InstrVoicerNode initialization: memStore.\nSending synthdef normally.".warn;
-						error.reportError;
-						"\nContinuing. Voicer will be usable. Pattern arguments will not be detected automatically.".postln;
-						def.send(target.server);
-					});
-				};
+				error.notNil.if({
+					"Error occurred during InstrVoicerNode initialization: memStore.\nSending synthdef normally.".warn;
+					error.reportError;
+					"\nContinuing. Voicer will be usable. Pattern arguments will not be detected automatically.".postln;
+					def.send(target.server);
+				});
+			};
 		}, {
-				// olddefname was not nil: the patch was made earlier by another node
-				// this one will use the same synthdef
+			// olddefname was not nil: the patch was made earlier by another node
+			// this one will use the same synthdef
 			defname = olddefname;
 			initArgs = this.makeInitArgs(ar);
 		});
@@ -359,7 +359,7 @@ InstrVoicerNode : SynthVoicerNode {
 		^class.new(instr, patchArgs)
 	}
 
-		// does trigger et al. need to hit the children?
+	// does trigger et al. need to hit the children?
 	trigger { arg freq, gate = 1, args, latency;
 		var bundle;
 		if(freq.isValidVoicerArg) {
@@ -380,13 +380,13 @@ InstrVoicerNode : SynthVoicerNode {
 	triggerMsg { arg freq, gate = 1, args;
 		var bundle;
 		bundle = Array.new;
-			// make messages for children
+		// make messages for children
 		children.do({ arg child; bundle = bundle ++ child.triggerMsg(freq, gate, args); });
 
 		bundle = bundle ++ super.triggerMsg(freq, gate, args);
-			// super.triggerMsg also handles global mapping
+		// super.triggerMsg also handles global mapping
 		NodeWatcher.register(synth);  // we now have a synth object too
-			// when the synth node dies, I need to set my flags
+		// when the synth node dies, I need to set my flags
 		Updater(synth, { |syn, msg|
 			(msg == \n_end).if({
 				(syn == synth).if({
@@ -413,7 +413,7 @@ InstrVoicerNode : SynthVoicerNode {
 		});
 	}
 
-		// releaseMsg assumes that the caller has done all the safety checks
+	// releaseMsg assumes that the caller has done all the safety checks
 	releaseMsg { arg gate = 0, wrap = true;	// wrap with \error msg?
 		var bundle;
 		(synth.notNil).if({
@@ -438,7 +438,7 @@ InstrVoicerNode : SynthVoicerNode {
 		(synth.notNil and: { synth.isPlaying }).if({
 			this.isPlaying = false;
 			bundle = List.new;
-				// collect free messages for children
+			// collect free messages for children
 			children.do({ arg child; bundle = bundle ++ child.freeMsg; });
 			^bundle ++ [[11, synth.nodeID]];
 		}, {
@@ -461,7 +461,7 @@ InstrVoicerNode : SynthVoicerNode {
 		var bundle, ar, argColl;
 		synth.notNil.if({
 			bundle = Array.new;
-				// collect set messages for children
+			// collect set messages for children
 			children.do({ arg child;
 				bundle = bundle ++ child.setMsg(args)
 			});
@@ -484,7 +484,7 @@ InstrVoicerNode : SynthVoicerNode {
 
 	displayName { ^instr.name.asString }
 
-// PRIVATE
+	// PRIVATE
 
 	mapArgsMsg { 		// collects mapArgsMsgs for this and children
 		var bundle;
@@ -503,11 +503,11 @@ InstrVoicerNode : SynthVoicerNode {
 
 	makePatchArgs { arg instr, ar;
 		var	argNames, argSpecs, argArray, proto,
-			argIndex, gateIndex, thisArg, basePatch, temp;
+		argIndex, gateIndex, thisArg, basePatch, temp;
 
-			// to support instr wrapping, I need to know what args are created during def building
+		// to support instr wrapping, I need to know what args are created during def building
 		try {
-				// can throw this one away
+			// can throw this one away
 			(basePatch = (instr.tryPerform(\patchClass) ?? { Patch }).new(instr)).asSynthDef;
 			argNames = basePatch.argNames;
 			argSpecs = basePatch.argSpecs;
@@ -518,21 +518,21 @@ InstrVoicerNode : SynthVoicerNode {
 		basePatch.free;	// remove dependents
 		initArgs = Array.new;
 
-			// if no args, make empty array
+		// if no args, make empty array
 		ar = ar ? [];
 		argArray = argNames.collect({ arg name, i;
 			argIndex = ar.indexOf(name);	// find specified value, if any
 			thisArg = argIndex.isNil.if({ nil }, { ar.at(argIndex+1) });
 
 			switch(name)
-				{ \gate } { KrNumberEditor(thisArg ? 0, argSpecs[i]).lag_(nil) }
-				{ \t_gate } { SimpleTrigger(argSpecs[i]) }
+			{ \gate } { KrNumberEditor(thisArg ? 0, argSpecs[i]).lag_(nil) }
+			{ \t_gate } { SimpleTrigger(argSpecs[i]) }
 
 			{		// if you're nesting a patch, and the inner patch has a gate arg,
-					// and the outer one does not, use inner patch as triggerable
-// I may remove this support because it never worked well
+				// and the outer one does not, use inner patch as triggerable
+				// I may remove this support because it never worked well
 				(thisArg.isKindOf(Instr)).if({
-						// make inner patch
+					// make inner patch
 					proto = InstrVoicerNode(thisArg, ar.at(argIndex+2),
 						bus, target, addAction, voicer);
 					children = children.add(proto);
@@ -550,9 +550,9 @@ InstrVoicerNode : SynthVoicerNode {
 						argIndex.notNil.if({
 							proto.tryPerform('value_', thisArg);// set its value
 						});
-							// so all nodes are properly initialized at play time
-							// only SimpleNumber args need to be added here; others
-							// will be fixed args that we can't talk to
+						// so all nodes are properly initialized at play time
+						// only SimpleNumber args need to be added here; others
+						// will be fixed args that we can't talk to
 						(argIndex.notNil
 							and: { #[\freq, \freqlag, \gate, \t_gate, \out]
 								.includes(name).not })
