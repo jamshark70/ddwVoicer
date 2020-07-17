@@ -569,3 +569,145 @@ InstrVoicerNode : SynthVoicerNode {
 	}
 
 }
+
+MIDIVoicerNode : SynthVoicerNode {
+	var midichannel, lastVelocity;
+
+	*new { arg thing, voicer;
+		^super.new(thing, [], voicer: voicer)  // super calls my own init
+	}
+
+	// most are ignored
+	init { |th, ar, b, targ, addAct, par|
+		defname = th;  // output MIDI channel
+		voicer = par;
+		midichannel = if(ar.size > 0) { ar[0] } { 0 };
+		lastVelocity = 64;
+	}
+
+	// message format: delay, method, chan, num, vel
+	triggerMsg { arg freq, gate = 1, args;
+		var bundle;
+		bundle = List.new;
+		bundle.add([0, \noteOn, midichannel, freq.cpsmidi.asInteger, (gate * 127).asInteger]);
+		^bundle
+	}
+
+	trigger { arg freq, gate = 1, args, latency;
+		var bundle;
+		if(freq.isValidVoicerArg) {
+			if(this.shouldSteal) {
+				this.stealNode(frequency, latency);
+			};
+			bundle = this.triggerMsg(freq, gate, args);
+			this.sendMIDIBundle(bundle);
+			// 'this' would exist in susPedalNodes if it was released while susPedal = on
+			// if we re-trigger it during that time, it's no longer 'released'
+			// so we must remove it from the susPedalNodes collection
+			voicer.susPedalNodes.remove(this);
+			frequency = freq;	// save frequency for Voicer.release
+			lastTrigger = SystemClock.seconds;	// save time
+			this.isPlaying = true;
+			isReleasing = false;
+		} {
+			reserved = false;
+		}
+	}
+
+	shouldSteal {
+		^steal and: {
+			isPlaying or: {
+				// not sure
+				SystemClock.seconds - lastTrigger < (myLastLatency ? 0)
+			}
+		}
+	}
+
+	// must pass in (synth) node because, when a node is stolen, my synth variable has changed
+	// to the new node, not the old one that should go away
+	stealNode { |freq, latency|
+		if(freq.notNil) {
+			defname.noteOff(midichannel, freq.cpsmidi.asInteger)
+		}
+	}
+
+	releaseTime_ {}
+
+	releaseMsg { arg gate = 0;
+		^[[0, \noteOff, midichannel, frequency.cpsmidi.asInteger]]
+	}
+
+	releaseCallBack {
+		^nil
+	}
+
+	release { arg gate = 0, latency, freq;
+		this.shouldRelease(freq).if({
+			this.sendMIDIBundle(this.releaseMsg(gate));
+			this.isPlaying = false;
+			isReleasing = true;
+			this.releaseTime = nil;
+		});
+	}
+
+	isPlaying { ^isPlaying }
+
+	reserved_ { |bool = false|
+		reserved = bool;
+		if(bool) { synth = Synth.basicNew(\dummy, Server.default) };
+	}
+
+	freeMsg {
+		^this.releaseMsg(0)
+	}
+
+	free {	// remove from server; assumes envelope is already released
+		if(this.isPlaying) { this.release(0, freq: frequency) };
+		this.isPlaying = false;
+	}
+
+	setMsg {}
+	setCallBack { ^nil }
+	// by MIDI, can only set midinote
+	// maybe later do mapped args to CCs but not today
+	set { |args, latency|
+		var i, j, note, vel, oldFreq;
+		if(this.isPlaying) {
+			i = args.detectIndex(_ == \freq);
+			if(i.notNil) {
+				note = args[i+1].cpsmidi.round.asInteger;
+				j = args.detectIndex(_ == \gate);
+				if(j.notNil) {
+					vel = (args[j+1] * 127).round.asInteger;
+					lastVelocity = vel;
+				} {
+					vel = lastVelocity;
+				};
+				oldFreq = frequency;
+				defname.noteOn(midichannel, note, vel);
+				thisThread.clock.sched(0.01, {
+					defname.noteOff(midichannel, oldFreq.cpsmidi.round.asInteger);
+				});
+			};
+		};
+	}
+	setArgDefaults {}
+	getSynthDesc { ^nil }
+
+	// not really applicable but something upstream will complain if I don't...
+	server { ^Server.default }
+
+	trace {}
+	map {}
+	mapArgsMsg {}
+	mapArgs {}
+	displayName { ^defname.asString }
+
+	sendMIDIBundle { |bundle|
+		bundle.do { |row|
+			var delay, cmd, args;
+			#delay, cmd ... args = row;
+			SystemClock.sched(delay, { defname.perform(cmd, *args) });
+		}
+	}
+}

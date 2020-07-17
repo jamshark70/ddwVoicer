@@ -101,6 +101,10 @@ Voicer {		// collect and manage voicer nodes
 				^InstrVoicerNode.new(thing, args, bus, target, addAction, this, defname);
 			}
 
+			{ thing.isKindOf(MIDIOut) } {
+				^MIDIVoicerNode(thing, this)
+			}
+
 				// default branch, error
 			{ Error("%: Invalid object to use as instrument. Can't build voicer.".format(thing)).throw }
 	}
