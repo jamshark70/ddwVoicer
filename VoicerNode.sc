@@ -671,11 +671,13 @@ MIDIVoicerNode : SynthVoicerNode {
 	// by MIDI, can only set midinote
 	// maybe later do mapped args to CCs but not today
 	set { |args, latency|
-		var i, j, note, vel, oldFreq;
+		var i, j, note, vel, oldNote;
 		if(this.isPlaying) {
 			i = args.detectIndex(_ == \freq);
 			if(i.notNil) {
-				note = args[i+1].cpsmidi.round.asInteger;
+				oldNote = frequency.cpsmidi.round.asInteger;
+				frequency = args[i+1];
+				note = frequency.cpsmidi.round.asInteger;
 				j = args.detectIndex(_ == \gate);
 				if(j.notNil) {
 					vel = (args[j+1] * 127).round.asInteger;
@@ -683,10 +685,13 @@ MIDIVoicerNode : SynthVoicerNode {
 				} {
 					vel = lastVelocity;
 				};
-				oldFreq = frequency;
-				defname.noteOn(midichannel, note, vel);
-				thisThread.clock.sched(0.01, {
-					defname.noteOff(midichannel, oldFreq.cpsmidi.round.asInteger);
+				this.sendMIDIBundle([[0, \noteOn, midichannel, note, vel]]);
+				SystemClock.sched(0.01, {
+					if(voicer.nodes.every { |node, i|
+						node.isPlaying.not or: { (node.frequency.cpsmidi.round != oldNote) }
+					}) {
+						this.sendMIDIBundle([[0, \noteOff, midichannel, oldNote]]);
+					};
 				});
 			};
 		};
