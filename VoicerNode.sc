@@ -637,17 +637,29 @@ MIDIVoicerNode : SynthVoicerNode {
 		^[[0, \noteOff, midichannel, frequency.cpsmidi.asInteger]]
 	}
 
+	releaseMsgCheckNote { |oldNote|
+		if(voicer.nodes.every { |node|
+			node === this or: {
+				node.isPlaying.not or: { (node.frequency.cpsmidi.round != oldNote) }
+			}
+		}) {
+			^this.releaseMsg
+		} {
+			^[]
+		}
+	}
+
 	releaseCallBack {
 		^nil
 	}
 
 	release { arg gate = 0, latency, freq;
-		this.shouldRelease(freq).if({
-			this.sendMIDIBundle(this.releaseMsg(gate));
+		if(this.shouldRelease(freq)) {
+			this.sendMIDIBundle(this.releaseMsgCheckNote(freq.cpsmidi.round));
 			this.isPlaying = false;
 			isReleasing = true;
 			this.releaseTime = nil;
-		});
+		};
 	}
 
 	isPlaying { ^isPlaying }
@@ -687,11 +699,7 @@ MIDIVoicerNode : SynthVoicerNode {
 				};
 				this.sendMIDIBundle([[0, \noteOn, midichannel, note, vel]]);
 				SystemClock.sched(0.01, {
-					if(voicer.nodes.every { |node, i|
-						node.isPlaying.not or: { (node.frequency.cpsmidi.round != oldNote) }
-					}) {
-						this.sendMIDIBundle([[0, \noteOff, midichannel, oldNote]]);
-					};
+					this.sendMIDIBundle(this.releaseMsgCheckNote(oldNote));
 				});
 			};
 		};
