@@ -589,7 +589,7 @@ MIDIVoicerNode : SynthVoicerNode {
 	triggerMsg { arg freq, gate = 1, args;
 		var bundle;
 		bundle = List.new;
-		bundle.add([0, \noteOn, midichannel, freq.cpsmidi.asInteger, (gate * 127).asInteger]);
+		bundle.add([0, \noteOn, midichannel, freq.cpsmidi.round.asInteger, (gate * 127).asInteger]);
 		^bundle
 	}
 
