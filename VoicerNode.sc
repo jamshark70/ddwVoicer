@@ -627,7 +627,7 @@ MIDIVoicerNode : SynthVoicerNode {
 	// to the new node, not the old one that should go away
 	stealNode { |freq, latency|
 		if(freq.notNil) {
-			defname.noteOff(midichannel, freq.cpsmidi.asInteger)
+			defname.noteOff(midichannel, freq.cpsmidi.round.asInteger)
 		}
 	}
 
@@ -643,9 +643,9 @@ MIDIVoicerNode : SynthVoicerNode {
 				node.isPlaying.not or: { (node.frequency.cpsmidi.round != oldNote) }
 			}
 		}) {
-			^this.releaseMsg
+			^[[0, \noteOff, midichannel, oldNote.asInteger]]
 		} {
-			^[]
+			^[];
 		}
 	}
 
