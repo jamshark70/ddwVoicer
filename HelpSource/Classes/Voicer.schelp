@@ -25,6 +25,8 @@ list::
 ## Compatible with event patterns -- Pbind etc. See the link::Guides/Using_Voicer##Using Voicer:: Guide.
 
 ## Voicer works with SynthDefs and Instr's. You should not send a Patch directly to Voicer. Voicer takes the Instr with an argument list and makes its own Patches.
+
+## July 2020: Voicer can now send MIDI notes, and VoicerGlobalControls can send MIDI CC data. (Currently it is not supported to update global control values from a pattern, though.)
 ::
 
 SynthDefs & Instr's used with voicer require the following features:
@@ -113,6 +115,8 @@ anything that responds to .asTarget. If you supply a MixerChannel, both the bus 
 argument:: addAction
 where the Synths will be placed in relation to the target. This setting will be ignored by Patch nodes.
 
+discussion::
+
 code::
 // with SynthDef (depends on Synths defined above):
 v = Voicer.new(8, "harpsi");  // 8 voices, all harpsi
@@ -148,8 +152,23 @@ v = Voicer(8, Instr.at([\test, \rlpf]),
 
 Each note that is triggered on this last voicer will place two Synths on the server: one for the harpsi, and another for the filter. They will all use the same bus:  meaning that if you trigger several notes at once, the effect of the filter will be compounded for each note. This may not be the result you want. strong::In general, you should use simple, self-contained Instr's or synthdefs in a voicer.::
 
-
 note:: With Instr, any argument you supply as a SimpleNumber will be wrapped in a KrNumberEditor so you can change its value later. This is different from Patch. If you want a SimpleNumber to serve as a fixed argument, make it a Ref: [\fixed_filter_freq, `12500].::
+
+For MIDI output, create a Voicer with a MIDIOut object as the "thing." In the args array, write code::chan: midichannel_num:: to specify the output channel. Because MIDI notes don't encapsulate any parameters other than velocity, all other code::args:: will be ignored.
+
+link::Classes/GlobalControlMIDIOut:: is the interface between a global control on this Voicer, and a MIDI CC on the remote device. First, create the global control. (The name doesn't matter.) Then attach a GlobalControlMIDIOut; a shortcut syntax is to call code::connectMIDIOut:: on the global control. All value changes will be forwarded to MIDI from this point forward.
+
+code::
+// MIDI output:
+m = MIDIOut.newByName("device", "port");
+
+// write 'args: [chan: channel number]' to set the output channel
+v = Voicer(20, m, args: [chan: 0]);
+
+// let's say CC 1 on the remote device is connected to filter frequency
+// (you could use a different spec to display real-world values)
+v.mapGlobal(\ffreq, nil, 0, \midi).connectMIDIOut(m, 0, 1);
+::
 
 method::clock
 
