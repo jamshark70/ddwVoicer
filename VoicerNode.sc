@@ -579,9 +579,19 @@ MIDIVoicerNode : SynthVoicerNode {
 
 	// most are ignored
 	init { |th, ar, b, targ, addAct, par|
+		var chanIndex;
 		defname = th;  // output MIDI channel
 		voicer = par;
-		midichannel = if(ar.size > 0) { ar[0] } { 0 };
+		if(ar.size > 0) {
+			chanIndex = ar.indexOf(\chan);
+			if(chanIndex.notNil) {
+				midichannel = ar[chanIndex + 1];
+			} {
+				midichannel = 0;
+			};
+		} {
+			midichannel = 0;
+		};
 		lastVelocity = 64;
 	}
 
