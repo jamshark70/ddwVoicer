@@ -573,8 +573,10 @@ InstrVoicerNode : SynthVoicerNode {
 MIDIVoicerNode : SynthVoicerNode {
 	var midichannel, lastVelocity;
 
-	*new { arg thing, voicer;
-		^super.new(thing, [], voicer: voicer)  // super calls my own init
+	*new { arg thing, args, voicer;
+		// note: voicer arg is called 'voicer' in the superclass
+		// do not try to match the keyword to the init method
+		^super.new(thing, args, voicer: voicer)  // super calls my own init
 	}
 
 	// most are ignored

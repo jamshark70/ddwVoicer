@@ -102,7 +102,7 @@ Voicer {		// collect and manage voicer nodes
 			}
 
 			{ thing.isKindOf(MIDIOut) } {
-				^MIDIVoicerNode(thing, this)
+				^MIDIVoicerNode(thing, args, this)
 			}
 
 				// default branch, error
