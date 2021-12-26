@@ -342,35 +342,38 @@ Voicer {		// collect and manage voicer nodes
 	}
 
 	// articulation support
-	findPrevious { |seconds|
+	findPrevious { |seconds, id|
 		^nodes.select { |node|
-			node.isPlaying and: { node.isReleasing.not and: {
-				node.releaseTime.isNil and: {
-					node.lastTrigger < seconds
-				}
-			} }
+			id.matchItem(node.id) and: {
+				node.isPlaying and: { node.isReleasing.not and: {
+					node.releaseTime.isNil and: {
+						node.lastTrigger < seconds
+					}
+				} }
+			}
 		}
 		.minItem { |node| node.lastTrigger }  // return earliest
 	}
 
-	articulate1 { |freq, dur, gate = 1, args, lat = -1, slur(true), seconds|
+	articulate1 { |freq, dur, gate = 1, args, lat = -1, slur(true), seconds, id|
 		if(seconds.isNil) { seconds = SystemClock.seconds };
-		^this.prArticulate1(this.findPrevious(seconds), freq, dur, gate, args, lat, slur, seconds)
+		^this.prArticulate1(this.findPrevious(seconds, id), freq, dur, gate, args, lat, slur, seconds)
 	}
 
-	articulate { |freq, dur, gate = 1, args, lat = -1, slur(true), seconds|
+	articulate { |freq, dur, gate = 1, args, lat = -1, slur(true), seconds, id|
 		if((lat ?? { 0 }).isNegative) { lat = latency };
 		if(freq.size == 0) {
-			^this.articulate1(freq, dur, gate, args, lat, slur, seconds)
+			^this.articulate1(freq, dur, gate, args, lat, slur, seconds, id)
 		} {
 			dur = dur.asArray;
 			^freq.asArray.collect { |f, i|
-				this.articulate1(f, dur.wrapAt(i), gate, args, lat, slur, seconds)
+				this.articulate1(f, dur.wrapAt(i), gate, args, lat, slur, seconds, id)
 			}
 		}
 	}
 
 	// assumes you have already found the previous node
+	// ('id' is used for finding previous -- since that's already done, don't need id here)
 	// mainly for Event support
 	prArticulate1 { |prev, freq, dur, gate = 1, args, lat = -1, slur(true), seconds|
 		var steal, cl = clock ? thisThread.clock,
@@ -411,15 +414,18 @@ Voicer {		// collect and manage voicer nodes
 		}
 	}
 
-	prGetArticNodes { |numNodes, seconds|
+	prGetArticNodes { |numNodes, seconds, id|
 		var	n;
 		if(seconds.isNil) { seconds = SystemClock.seconds };
 		n = nodes.select { |node|
-			node.isPlaying and: { node.isReleasing.not and: {
-				node.releaseTime.isNil and: {
-					node.lastTrigger < seconds
-				}
-			} }
+			// matchItem interface: nil id arg matches everything
+			id.matchItem(node.id) and: {
+				node.isPlaying and: { node.isReleasing.not and: {
+					node.releaseTime.isNil and: {
+						node.lastTrigger < seconds
+					}
+				} }
+			}
 		}.sort { |a, b| a.lastTrigger < b.lastTrigger }
 		.keep(numNodes);
 		n.do { |node| node.reserved = true };
@@ -865,12 +871,13 @@ Voicer {		// collect and manage voicer nodes
 					~nodes = voicer.perform(
 						if(~forceNew == true) { \prGetNodes } { \prGetArticNodes },
 						max(~freq.size, max(~sustain.size, ~gate.size)),
-						seconds
+						seconds,
+						~layerID  // optional; if nil, matches any
 					);
 					voicer.setArgsInEvent(currentEnvironment);
 
 					~nodes.do({ |node, i|
-						var latency, freq, length;
+						var latency, freq, length, triggerTime, releaseTime;
 
 						latency = lag;
 						// backward compatibility: I should NOT add server latency
@@ -894,12 +901,16 @@ Voicer {		// collect and manage voicer nodes
 							})
 						);
 						if(length.notNil and: { length != inf }) {
-							node.releaseTime = thisThread.clock.beats2secs(
+							triggerTime = node.lastTrigger;
+							releaseTime = thisThread.clock.beats2secs(
 								(thisThread.beats + length + timingOffset + (i * strum))
 							);
 							thisThread.clock.sched(length + timingOffset + (i * strum), {
-								voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
-									node.server.latency.notNil.if({ lag + node.server.latency }));
+								if(node.lastTrigger == triggerTime) {
+									node.releaseTime = releaseTime;
+									voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
+										node.server.latency.notNil.if({ lag + node.server.latency }));
+								};
 							});
 						} {
 							node.releaseTime = nil;  // nil length or inf = ok to be rearticulated

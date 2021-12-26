@@ -21,8 +21,9 @@ SynthVoicerNode {
 	<myLastLatency,	// because latency is now variable at the voicer level
 	// important because you may have 2 processes with different latencies
 	// using the same Voicer
-	<>steal = true;		// by default, if another note needs this object, its synth node can be killed
+	<>steal = true,		// by default, if another note needs this object, its synth node can be killed
 	// false means let the node die on its own (you lose synth activity control)
+	<>id = 0;  // a layer ID for articulation
 
 	*new { arg thing, args, bus, target, addAction = \addToTail, voicer, defname;
 		target = target.asTarget;		// if nil, gives default server
@@ -667,6 +668,7 @@ MIDIVoicerNode : SynthVoicerNode {
 
 	release { arg gate = 0, latency, freq;
 		if(this.shouldRelease(freq)) {
+			freq = freq ?? { frequency };
 			this.sendMIDIBundle(this.releaseMsgCheckNote(freq.cpsmidi.round));
 			this.isPlaying = false;
 			isReleasing = true;
@@ -700,19 +702,21 @@ MIDIVoicerNode : SynthVoicerNode {
 			i = args.detectIndex(_ == \freq);
 			if(i.notNil) {
 				oldNote = frequency.cpsmidi.round.asInteger;
-				frequency = args[i+1];
-				note = frequency.cpsmidi.round.asInteger;
-				j = args.detectIndex(_ == \gate);
-				if(j.notNil) {
-					vel = (args[j+1] * 127).round.asInteger;
-					lastVelocity = vel;
-				} {
-					vel = lastVelocity;
+				note = args[i+1].cpsmidi.round.asInteger;
+				if(note != oldNote) {
+					frequency = args[i+1];
+					j = args.detectIndex(_ == \gate);
+					if(j.notNil) {
+						vel = (args[j+1] * 127).round.asInteger;
+						lastVelocity = vel;
+					} {
+						vel = lastVelocity;
+					};
+					this.sendMIDIBundle([[0, \noteOn, midichannel, note, vel]]);
+					SystemClock.sched(0.01, {
+						this.sendMIDIBundle(this.releaseMsgCheckNote(oldNote));
+					});
 				};
-				this.sendMIDIBundle([[0, \noteOn, midichannel, note, vel]]);
-				SystemClock.sched(0.01, {
-					this.sendMIDIBundle(this.releaseMsgCheckNote(oldNote));
-				});
 			};
 		};
 	}
