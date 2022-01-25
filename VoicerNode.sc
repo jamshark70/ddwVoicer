@@ -195,6 +195,7 @@ SynthVoicerNode {
 			this.isPlaying = false;
 			isReleasing = true;
 			this.releaseTime = nil;
+			id = 0;
 		});
 	}
 
@@ -228,6 +229,7 @@ SynthVoicerNode {
 	free {	// remove from server; assumes envelope is already released
 		(this.isPlaying).if({ synth.free; });
 		this.isPlaying = false;
+		id = 0;
 	}
 
 	setMsg { arg args;
@@ -411,6 +413,7 @@ InstrVoicerNode : SynthVoicerNode {
 			this.isPlaying = false;
 			isReleasing = true;
 			releaseTime = nil;
+			id = 0;
 		});
 	}
 
@@ -481,6 +484,7 @@ InstrVoicerNode : SynthVoicerNode {
 		var bundle;
 		target.server.listSendBundle(nil, this.freeMsg);
 		this.isPlaying = false;
+		id = 0;
 	}
 
 	displayName { ^instr.name.asString }
@@ -673,6 +677,7 @@ MIDIVoicerNode : SynthVoicerNode {
 			this.isPlaying = false;
 			isReleasing = true;
 			this.releaseTime = nil;
+			id = 0;
 		};
 	}
 
@@ -687,9 +692,10 @@ MIDIVoicerNode : SynthVoicerNode {
 		^this.releaseMsg(0)
 	}
 
-	free {	// remove from server; assumes envelope is already released
+	free {	// stop node; in Rack, can do this only by closing the gate
 		if(this.isPlaying) { this.release(0, freq: frequency) };
 		this.isPlaying = false;
+		id = 0;
 	}
 
 	setMsg {}

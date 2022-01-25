@@ -144,12 +144,12 @@ Voicer {		// collect and manage voicer nodes
 
 		// this method is reserved for Event usage
 		// you should not use it yourself - instead use trigger, release and gate methods
-	prGetNodes { |numNodes|
+	prGetNodes { |numNodes, id|
 		var	node;
 		^Array.fill(numNodes, {
 				// must set reserved = true
 				// so that the next node request doesn't return the same
-			node = this.perform(stealer).reserved_(true);
+			node = this.perform(stealer).reserved_(true).id_(id);
 		});
 	}
 
@@ -428,9 +428,9 @@ Voicer {		// collect and manage voicer nodes
 			}
 		}.sort { |a, b| a.lastTrigger < b.lastTrigger }
 		.keep(numNodes);
-		n.do { |node| node.reserved = true };
+		n.do { |node| node.reserved_(true).id_(id) };
 		if(n.size < numNodes) {
-			n = n ++ this.prGetNodes(numNodes - n.size);
+			n = n ++ this.prGetNodes(numNodes - n.size, id);
 		};
 		^n
 	}
