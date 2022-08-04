@@ -576,7 +576,7 @@ InstrVoicerNode : SynthVoicerNode {
 }
 
 MIDIVoicerNode : SynthVoicerNode {
-	var midichannel, lastVelocity;
+	var midichannel, lastVelocity, noteOffMsg;
 
 	*new { arg thing, args, voicer;
 		// note: voicer arg is called 'voicer' in the superclass
@@ -587,7 +587,6 @@ MIDIVoicerNode : SynthVoicerNode {
 	// most are ignored
 	init { |th, ar, b, targ, addAct, par|
 		var chanIndex;
-		defname = th;  // output MIDI channel
 		voicer = par;
 		if(ar.size > 0) {
 			chanIndex = ar.indexOf(\chan);
@@ -599,15 +598,17 @@ MIDIVoicerNode : SynthVoicerNode {
 		} {
 			midichannel = 0;
 		};
+		// this object handles note messages only
+		defname = MIDINoteMessage(
+			channel: midichannel, device: th,
+			latency: Server.default.latency
+		);
+		noteOffMsg = MIDINoteMessage(
+			velocity: 0,
+			channel: midichannel, device: th,
+			latency: Server.default.latency
+		);
 		lastVelocity = 64;
-	}
-
-	// message format: delay, method, chan, num, vel
-	triggerMsg { arg freq, gate = 1, args;
-		var bundle;
-		bundle = List.new;
-		bundle.add([0, \noteOn, midichannel, freq.cpsmidi.round.asInteger, (gate * 127).asInteger]);
-		^bundle
 	}
 
 	trigger { arg freq, gate = 1, args, latency;
@@ -616,8 +617,7 @@ MIDIVoicerNode : SynthVoicerNode {
 			if(this.shouldSteal) {
 				this.stealNode(frequency, latency);
 			};
-			bundle = this.triggerMsg(freq, gate, args);
-			this.sendMIDIBundle(bundle);
+			defname.play(freq.cpsmidi.round.asInteger, (gate * 127).asInteger);
 			// 'this' would exist in susPedalNodes if it was released while susPedal = on
 			// if we re-trigger it during that time, it's no longer 'released'
 			// so we must remove it from the susPedalNodes collection
@@ -644,25 +644,17 @@ MIDIVoicerNode : SynthVoicerNode {
 	// to the new node, not the old one that should go away
 	stealNode { |freq, latency|
 		if(freq.notNil) {
-			defname.noteOff(midichannel, freq.cpsmidi.round.asInteger)
+			noteOffMsg.play(freq.cpsmidi.round.asInteger);
 		}
 	}
 
 	releaseTime_ {}
 
-	releaseMsg { arg gate = 0;
-		^[[0, \noteOff, midichannel, frequency.cpsmidi.asInteger]]
-	}
-
-	releaseMsgCheckNote { |oldNote|
-		if(voicer.nodes.every { |node|
+	releaseCheckNote { |oldNote|
+		^voicer.nodes.every { |node|
 			node === this or: {
 				node.isPlaying.not or: { (node.frequency.cpsmidi.round != oldNote) }
 			}
-		}) {
-			^[[0, \noteOff, midichannel, oldNote.asInteger]]
-		} {
-			^[];
 		}
 	}
 
@@ -671,9 +663,13 @@ MIDIVoicerNode : SynthVoicerNode {
 	}
 
 	release { arg gate = 0, latency, freq;
+		var num;
 		if(this.shouldRelease(freq)) {
 			freq = freq ?? { frequency };
-			this.sendMIDIBundle(this.releaseMsgCheckNote(freq.cpsmidi.round));
+			num = freq.cpsmidi.round;
+			if(this.releaseCheckNote(num)) {
+				noteOffMsg.play(num);
+			};
 			this.isPlaying = false;
 			isReleasing = true;
 			this.releaseTime = nil;
@@ -718,9 +714,11 @@ MIDIVoicerNode : SynthVoicerNode {
 					} {
 						vel = lastVelocity;
 					};
-					this.sendMIDIBundle([[0, \noteOn, midichannel, note, vel]]);
+					defname.play(note, vel);
 					SystemClock.sched(0.01, {
-						this.sendMIDIBundle(this.releaseMsgCheckNote(oldNote));
+						if(this.releaseCheckNote(oldNote)) {
+							noteOffMsg.play(oldNote);
+						};
 					});
 				};
 			};
@@ -737,12 +735,4 @@ MIDIVoicerNode : SynthVoicerNode {
 	mapArgsMsg {}
 	mapArgs {}
 	displayName { ^defname.asString }
-
-	sendMIDIBundle { |bundle|
-		bundle.do { |row|
-			var delay, cmd, args;
-			#delay, cmd ... args = row;
-			SystemClock.sched(delay, { defname.perform(cmd, *args) });
-		}
-	}
 }

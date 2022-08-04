@@ -101,10 +101,8 @@ Voicer {		// collect and manage voicer nodes
 				^InstrVoicerNode.new(thing, args, bus, target, addAction, this, defname);
 			}
 
-			// MIDI input objects also respond to noteOn
-			// but I'm gonna assume you're a grownup:
-			// you make sure that it's a MIDI output object
-			{ thing.respondsTo(\noteOn) } {
+			// MIDIOut no longer supported
+			{ thing.isKindOf(AbstractMIDISender) } {
 				^MIDIVoicerNode(thing, args, this)
 			}
 

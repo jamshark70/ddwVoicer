@@ -154,13 +154,13 @@ Each note that is triggered on this last voicer will place two Synths on the ser
 
 note:: With Instr, any argument you supply as a SimpleNumber will be wrapped in a KrNumberEditor so you can change its value later. This is different from Patch. If you want a SimpleNumber to serve as a fixed argument, make it a Ref: [\fixed_filter_freq, `12500].::
 
-For MIDI output, create a Voicer with a MIDIOut object as the "thing." In the args array, write code::chan: midichannel_num:: to specify the output channel. Because MIDI notes don't encapsulate any parameters other than velocity, all other code::args:: will be ignored.
+MIDI output, as of 8/2022, uses the ddwMIDIMessageSend quark. Create a Voicer with a MIDISender or VSTPluginMIDISender object as the "thing." In the args array, write code::chan: midichannel_num:: to specify the output channel. Because MIDI notes don't encapsulate any parameters other than velocity, all other code::args:: will be ignored.
 
 link::Classes/GlobalControlMIDIOut:: is the interface between a global control on this Voicer, and a MIDI CC on the remote device. First, create the global control. (The name doesn't matter.) Then attach a GlobalControlMIDIOut; a shortcut syntax is to call code::connectMIDIOut:: on the global control. All value changes will be forwarded to MIDI from this point forward.
 
 code::
 // MIDI output:
-m = MIDIOut.newByName("device", "port");
+m = MIDISender.newByName("device", "port");
 
 // write 'args: [chan: channel number]' to set the output channel
 v = Voicer(20, m, args: [chan: 0]);
