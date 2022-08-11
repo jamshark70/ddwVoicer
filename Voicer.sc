@@ -385,6 +385,7 @@ Voicer {		// collect and manage voicer nodes
 				this.trigger1(freq, gate, args, lat);
 			}
 		};
+		var saveID;
 		if((lat ?? { 0 }).isNegative) { lat = latency };
 		if(seconds.isNil) { seconds = SystemClock.seconds };
 		if(prev.notNil) {
@@ -394,11 +395,13 @@ Voicer {		// collect and manage voicer nodes
 				prev.frequency = freq;
 				prev.lastTrigger = SystemClock.seconds;
 			} {
+				saveID = prev.id;  // must do this before 'release'!
 				prev.release(-1.008, latency: lat);  // -1 to suppress previous release envelope
 				steal = prev.steal;
 				prev.steal = false;
 				prev.trigger(freq, gate, args, lat);
 				prev.steal = steal;
+				prev.id = saveID;
 			};
 			if(dur.notNil) {
 				// seconds + beats makes no sense
