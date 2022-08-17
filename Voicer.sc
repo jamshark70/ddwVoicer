@@ -891,6 +891,9 @@ Voicer {		// collect and manage voicer nodes
 						};
 						freq = ~freq.wrapAt(i);
 						length = ~sustain.wrapAt(i);
+						releaseTime = thisThread.clock.beats2secs(
+							(thisThread.beats + length + timingOffset + (i * strum))
+						);
 
 						~schedBundleArray.(latency, ~timingOffset + (i * strum),
 							node.server,
@@ -899,17 +902,15 @@ Voicer {		// collect and manage voicer nodes
 									node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i));
 								} {
 									voicer.prArticulate1(node, freq, nil, ~gate.wrapAt(i), ~args.wrapAt(i),
-										slur: length == inf and: { ~accent != true },
+										slur: ~accent != true,
 										seconds: seconds
 									);
 								};
+								node.releaseTime = releaseTime;
 							})
 						);
 						if(length.notNil and: { length != inf }) {
 							triggerTime = node.lastTrigger;
-							releaseTime = thisThread.clock.beats2secs(
-								(thisThread.beats + length + timingOffset + (i * strum))
-							);
 							thisThread.clock.sched(length + timingOffset + (i * strum), {
 								if(node.lastTrigger == triggerTime) {
 									node.releaseTime = releaseTime;
