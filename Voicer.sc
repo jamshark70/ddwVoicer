@@ -35,7 +35,20 @@ Voicer {		// collect and manage voicer nodes
 	init { arg v, th, ar, b, targ, addAct;
 		var args, lcm;		// for initializing nodes
 
-		globalControls = IdentityDictionary.new;
+		globalControls = ValidatingIdentityDictionary.new;
+		globalControls.validator_({ |value|
+			value.isKindOf(VoicerGlobalControl)
+		})
+		.putFallback_({ |key, value, dict|
+			if(value.isNumber) {
+				dict.at(key).value = value;
+			} {
+				Error(
+					"Improper attempt to put a % into the globalControls collection"
+					.format(value)
+				).throw;
+			};
+		});
 
 		target = targ.asTarget;
 		if(parallelSynthGroup) {
@@ -947,7 +960,21 @@ MonoPortaVoicer : Voicer {
 	init { arg v, th, ar, b, targ, addAct, preAlloc;
 		var args;		// for initializing nodes
 
-		globalControls = IdentityDictionary.new;
+		globalControls = ValidatingIdentityDictionary.new;
+		globalControls.validator_({ |value|
+			value.isKindOf(VoicerGlobalControl)
+		})
+		.putFallback_({ |key, value, dict|
+			if(value.isNumber) {
+				dict.at(key).value = value;
+			} {
+				Error(
+					"Improper attempt to put a % into the globalControls collection"
+					.format(value)
+				).throw;
+			};
+		});
+
 		lastFreqs = List.new;
 
 		target = targ.asTarget;
