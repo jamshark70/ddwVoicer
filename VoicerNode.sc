@@ -165,7 +165,7 @@ SynthVoicerNode {
 	stealNode { |node, latency|
 		// [synth, node, node.isPlaying, voicer.nodes.count(_.isPlaying)].debug("stealing: new synth, old synth, old is playing, number of playing voicer nodes");
 		(synth.notNil/* and: { synth.isPlaying }*/).if({
-			node.server.sendBundle(latency, #[error, -1], node.setMsg(\gate, -1.008), #[error, -2]);
+			node.server.sendBundle(latency, #[error, -1], node.setMsg(\gate, -1.025), #[error, -2]);
 		});
 	}
 
@@ -617,7 +617,7 @@ MIDIVoicerNode : SynthVoicerNode {
 			if(this.shouldSteal) {
 				this.stealNode(frequency, latency);
 			};
-			defname.play(freq.cpsmidi.round.asInteger, (gate * 127).asInteger);
+			defname.play(freq.cpsmidi/*.round.asInteger*/, (gate * 127).asInteger);
 			// 'this' would exist in susPedalNodes if it was released while susPedal = on
 			// if we re-trigger it during that time, it's no longer 'released'
 			// so we must remove it from the susPedalNodes collection
@@ -644,16 +644,16 @@ MIDIVoicerNode : SynthVoicerNode {
 	// to the new node, not the old one that should go away
 	stealNode { |freq, latency|
 		if(freq.notNil) {
-			noteOffMsg.play(freq.cpsmidi.round.asInteger);
+			noteOffMsg.play(freq.cpsmidi/*.round.asInteger*/);
 		}
 	}
 
-	releaseTime_ {}
+	// releaseTime_ {}
 
 	releaseCheckNote { |oldNote|
 		^voicer.nodes.every { |node|
 			node === this or: {
-				node.isPlaying.not or: { (node.frequency.cpsmidi.round != oldNote) }
+				node.isPlaying.not or: { (node.frequency.cpsmidi/*.round*/ != oldNote) }
 			}
 		}
 	}
@@ -666,7 +666,7 @@ MIDIVoicerNode : SynthVoicerNode {
 		var num;
 		if(this.shouldRelease(freq)) {
 			freq = freq ?? { frequency };
-			num = freq.cpsmidi.round;
+			num = freq.cpsmidi/*.round*/;
 			if(this.releaseCheckNote(num)) {
 				noteOffMsg.play(num);
 			};
@@ -703,8 +703,8 @@ MIDIVoicerNode : SynthVoicerNode {
 		if(this.isPlaying) {
 			i = args.detectIndex(_ == \freq);
 			if(i.notNil) {
-				oldNote = frequency.cpsmidi.round.asInteger;
-				note = args[i+1].cpsmidi.round.asInteger;
+				oldNote = frequency.cpsmidi/*.round.asInteger*/;
+				note = args[i+1].cpsmidi/*.round.asInteger*/;
 				if(note != oldNote) {
 					frequency = args[i+1];
 					j = args.detectIndex(_ == \gate);
