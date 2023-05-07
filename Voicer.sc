@@ -750,6 +750,7 @@ Voicer {		// collect and manage voicer nodes
 
 				prepNote: #{
 					var i;
+					var numRests;
 					~freq = ~freq ?? { ~note.freq };
 					(~midi ? true).if({ ~freq = ~midiNoteToFreq.value(~freq).asArray },
 						{ ~freq = ~freq.asArray });
@@ -770,7 +771,13 @@ Voicer {		// collect and manage voicer nodes
 						.if({ ~args.removeAt(i); ~args.removeAt(i); }, { 0.5 });
 					}).asArray;
 
-					~nodes = ~voicer.prGetNodes(max(~freq.size, max(~length.size, ~gate.size)));
+					numRests = ~freq.count(_.isRest);
+					~nodes = ~voicer.prGetNodes(
+						max(
+							0,
+							max(~freq.size, max(~length.size, ~gate.size)) - numRests
+						)
+					);
 					~voicer.setArgsInEvent(currentEnvironment);
 				},
 
@@ -785,18 +792,20 @@ Voicer {		// collect and manage voicer nodes
 
 						~nodes.do({ |node, i|
 							var	freq = ~freq.wrapAt(i), length = ~length.wrapAt(i);
-							~schedBundleArray.(~lag ? 0, timingOffset,
-								node.server,
-								node.server.makeBundle(false, {
-									node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i));
-								})
-							);
-							(length.notNil and: { length != inf }).if({
-								thisThread.clock.sched(length + timingOffset, {
-									voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
-										node.server.latency.notNil.if({ lag + node.server.latency }));
+							if(freq.isRest.not) {
+								~schedBundleArray.(~lag ? 0, timingOffset,
+									node.server,
+									node.server.makeBundle(false, {
+										node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i));
+									})
+								);
+								(length.notNil and: { length != inf }).if({
+									thisThread.clock.sched(length + timingOffset, {
+										voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
+											node.server.latency.notNil.if({ lag + node.server.latency }));
+									});
 								});
-							});
+							};
 						});
 					});
 					~delta ?? { ~delta = ~dur };
@@ -808,6 +817,7 @@ Voicer {		// collect and manage voicer nodes
 			Event.addEventType(\voicerNote, #{|server|
 				var	lag, strum, sustain, i, timingOffset = ~timingOffset ? 0, releaseGate,
 				voicer = ~voicer;
+				var numRests;
 
 				if(voicer.notNil and: { currentEnvironment.isRest.not }) {
 					~freq = (~freq.value + ~detune).asArray;
@@ -829,7 +839,13 @@ Voicer {		// collect and manage voicer nodes
 					}).asArray;
 					releaseGate = (~releaseGate ? 0).asArray;
 
-					~nodes = voicer.prGetNodes(max(~freq.size, max(~sustain.size, ~gate.size)));
+					numRests = ~freq.count(_.isRest);
+					~nodes = ~voicer.prGetNodes(
+						max(
+							0,
+							max(~freq.size, max(~length.size, ~gate.size)) - numRests
+						)
+					);
 					voicer.setArgsInEvent(currentEnvironment);
 
 					~nodes.do({ |node, i|
@@ -844,18 +860,20 @@ Voicer {		// collect and manage voicer nodes
 						freq = ~freq.wrapAt(i);
 						length = ~sustain.wrapAt(i);
 
-						~schedBundleArray.(latency, ~timingOffset + (i * strum),
-							node.server,
-							node.server.makeBundle(false, {
-								node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i));
-							})
-						);
-						(length.notNil and: { length != inf }).if({
-							thisThread.clock.sched(length + timingOffset + (i * strum), {
-								voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
-									node.server.latency.notNil.if({ lag + node.server.latency }));
+						if(freq.isRest.not) {
+							~schedBundleArray.(latency, ~timingOffset + (i * strum),
+								node.server,
+								node.server.makeBundle(false, {
+									node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i));
+								})
+							);
+							(length.notNil and: { length != inf }).if({
+								thisThread.clock.sched(length + timingOffset + (i * strum), {
+									voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
+										node.server.latency.notNil.if({ lag + node.server.latency }));
+								});
 							});
-						});
+						};
 					});
 				};
 			});
@@ -864,6 +882,7 @@ Voicer {		// collect and manage voicer nodes
 				var	lag, strum, sustain, delta, i, timingOffset = ~timingOffset ? 0, releaseGate,
 				voicer = ~voicer,
 				seconds = thisThread.seconds;
+				var numRests;
 
 				if(voicer.notNil and: { currentEnvironment.isRest.not }) {
 					~freq = (~freq.value + ~detune).asArray;
@@ -885,13 +904,18 @@ Voicer {		// collect and manage voicer nodes
 					}).asArray;
 					releaseGate = (~releaseGate ? 0).asArray;
 
+					numRests = ~freq.count(_.isRest);
 					~nodes = voicer.perform(
 						if(~forceNew == true) { \prGetNodes } { \prGetArticNodes },
-						max(~freq.size, max(~sustain.size, ~gate.size)),
+						max(
+							0,
+							max(~freq.size, max(~sustain.size, ~gate.size)) - numRests
+						),
 						seconds,
 						~layerID  // optional; if nil, matches any
 					);
 					voicer.setArgsInEvent(currentEnvironment);
+					~minGate = (~minGate ?? { 0 }).asArray;
 
 					~nodes.do({ |node, i|
 						var latency, freq, length, triggerTime, releaseTime;
@@ -903,36 +927,41 @@ Voicer {		// collect and manage voicer nodes
 							latency = latency + (node.server.latency ? 0)
 						};
 						freq = ~freq.wrapAt(i);
-						length = ~sustain.wrapAt(i);
+						length = max(
+							~sustain.wrapAt(i),
+							~minGate.wrapAt(i) * thisThread.clock.tempo
+						);
 						releaseTime = thisThread.clock.beats2secs(
 							(thisThread.beats + length + timingOffset + (i * strum))
 						);
 
-						~schedBundleArray.(latency, ~timingOffset + (i * strum),
-							node.server,
-							node.server.makeBundle(false, {
-								if(~forceNew == true) {
-									node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i));
-								} {
-									voicer.prArticulate1(node, freq, nil, ~gate.wrapAt(i), ~args.wrapAt(i),
-										slur: ~accent != true,
-										seconds: seconds
-									);
-								};
-								node.releaseTime = releaseTime;
-							})
-						);
-						if(length.notNil and: { length != inf }) {
-							triggerTime = node.lastTrigger;
-							thisThread.clock.sched(length + timingOffset + (i * strum), {
-								if(node.lastTrigger == triggerTime) {
+						if(freq.isRest.not) {
+							~schedBundleArray.(latency, ~timingOffset + (i * strum),
+								node.server,
+								node.server.makeBundle(false, {
+									if(~forceNew == true) {
+										node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i));
+									} {
+										voicer.prArticulate1(node, freq, nil, ~gate.wrapAt(i), ~args.wrapAt(i),
+											slur: ~accent != true,
+											seconds: seconds
+										);
+									};
 									node.releaseTime = releaseTime;
-									voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
-										node.server.latency.notNil.if({ lag + node.server.latency }));
-								};
-							});
-						} {
-							node.releaseTime = nil;  // nil length or inf = ok to be rearticulated
+								})
+							);
+							if(length.notNil and: { length != inf }) {
+								triggerTime = node.lastTrigger;
+								thisThread.clock.sched(length + timingOffset + (i * strum), {
+									if(node.lastTrigger == triggerTime) {
+										node.releaseTime = releaseTime;
+										voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
+											node.server.latency.notNil.if({ lag + node.server.latency }));
+									};
+								});
+							} {
+								node.releaseTime = nil;  // nil length or inf = ok to be rearticulated
+							};
 						};
 					});
 				};
