@@ -576,7 +576,8 @@ InstrVoicerNode : SynthVoicerNode {
 }
 
 MIDIVoicerNode : SynthVoicerNode {
-	var midichannel, lastVelocity, noteOffMsg;
+	var midichannel = 0, lastVelocity, noteOffMsg;
+	var noteFunc;
 
 	*new { arg thing, args, voicer;
 		// note: voicer arg is called 'voicer' in the superclass
@@ -588,15 +589,17 @@ MIDIVoicerNode : SynthVoicerNode {
 	init { |th, ar, b, targ, addAct, par|
 		var chanIndex;
 		voicer = par;
-		if(ar.size > 0) {
-			chanIndex = ar.indexOf(\chan);
-			if(chanIndex.notNil) {
-				midichannel = ar[chanIndex + 1];
-			} {
-				midichannel = 0;
-			};
-		} {
-			midichannel = 0;
+		noteFunc = { |note| note };
+		ar.tryPerform(\pairsDo) { |key, value|
+			switch(key)
+			{ \chan } {
+				midichannel = value;
+			}
+			{ \int } {
+				if(value.asBoolean) {
+					noteFunc = { |note| note.round.asInteger }
+				}
+			}
 		};
 		// this object handles note messages only
 		defname = MIDINoteMessage(
@@ -617,7 +620,7 @@ MIDIVoicerNode : SynthVoicerNode {
 			if(this.shouldSteal) {
 				this.stealNode(frequency, latency);
 			};
-			defname.play(freq.cpsmidi/*.round.asInteger*/, (gate * 127).asInteger);
+			defname.play(noteFunc.(freq.cpsmidi), (gate * 127).asInteger);
 			// 'this' would exist in susPedalNodes if it was released while susPedal = on
 			// if we re-trigger it during that time, it's no longer 'released'
 			// so we must remove it from the susPedalNodes collection
@@ -644,7 +647,7 @@ MIDIVoicerNode : SynthVoicerNode {
 	// to the new node, not the old one that should go away
 	stealNode { |freq, latency|
 		if(freq.notNil) {
-			noteOffMsg.play(freq.cpsmidi/*.round.asInteger*/);
+			noteOffMsg.play(noteFunc.(freq.cpsmidi));
 		}
 	}
 
@@ -653,7 +656,7 @@ MIDIVoicerNode : SynthVoicerNode {
 	releaseCheckNote { |oldNote|
 		^voicer.nodes.every { |node|
 			node === this or: {
-				node.isPlaying.not or: { (node.frequency.cpsmidi/*.round*/ != oldNote) }
+				node.isPlaying.not or: { (noteFunc.(node.frequency.cpsmidi) != oldNote) }
 			}
 		}
 	}
@@ -666,7 +669,7 @@ MIDIVoicerNode : SynthVoicerNode {
 		var num;
 		if(this.shouldRelease(freq)) {
 			freq = freq ?? { frequency };
-			num = freq.cpsmidi/*.round*/;
+			num = noteFunc.(freq.cpsmidi);
 			if(this.releaseCheckNote(num)) {
 				noteOffMsg.play(num);
 			};
@@ -703,8 +706,8 @@ MIDIVoicerNode : SynthVoicerNode {
 		if(this.isPlaying) {
 			i = args.detectIndex(_ == \freq);
 			if(i.notNil) {
-				oldNote = frequency.cpsmidi/*.round.asInteger*/;
-				note = args[i+1].cpsmidi/*.round.asInteger*/;
+				oldNote = noteFunc.(frequency.cpsmidi);
+				note = noteFunc.(args[i+1].cpsmidi);
 				if(note != oldNote) {
 					frequency = args[i+1];
 					j = args.detectIndex(_ == \gate);
