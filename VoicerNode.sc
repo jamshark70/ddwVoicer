@@ -739,3 +739,165 @@ MIDIVoicerNode : SynthVoicerNode {
 	mapArgs {}
 	displayName { ^defname.asString }
 }
+
+SynVoicerNode : SynthVoicerNode {
+	triggerMsg { arg freq, gate = 1, args;
+		var args2;
+		var plugKey, plug;
+		var fixPlug = { |args, key, value, i|
+			// in case we're in an event
+			plugKey = (key.asString ++ "Plug").asSymbol;
+			plug = plugKey.envirGet;
+			if(plug.canMakePlug) {
+				args[i+1] = plug.dereference.valueEnvir(value);
+			};
+		};
+		// assemble arguments
+		args2 = initArgs ++ [\gate, gate, \t_gate, gate];
+		// an arg could be a one-dimensional array
+		// but it shouldn't have more dimensions than that
+		args = (args ? []);
+		args.pairsDo { |key, value, i|
+			if(value.respondsTo(\flat)) { args[i+1] = value.flat };
+			// avoid duplicating Plugs
+			if(initArgDict[key].notNil and: {
+				value === initArgDict[key]
+			}) {
+				args[i] = nil;
+				args[i+1] = nil;
+			} {
+				fixPlug.(args, key, value, i);
+			};
+		};
+		(args.notEmpty).if({ args2 = args2 ++ args.select(_.notNil) });
+		// this may need to change for freq plugs
+		freq.notNil.if({ args2 = args2 ++ [\freq, freq] });
+		fixPlug.(args2, \freq, freq, args2.size - 2);
+		args2 = args2 ++ this.mapArgs ++ [\out, bus.index, \outbus, bus.index];
+		// make synth object
+		synth = Syn.basicNew(defname, args2, target, addAction);
+		// note, no multichannel expansion here
+		// mc-expansion is handled in voicerNote events
+		^synth.prepareToBundle;
+	}
+
+	triggerCallBack { ^nil }	// this is what OSCSchedule uses for its clientsidefunc
+	// InstrVoicerNode uses this
+
+	trigger { arg freq, gate = 1, args, latency;
+		var bundle;
+		if(freq.isValidVoicerArg) {
+			this.shouldSteal.if({
+				this.stealNode(synth, latency);
+			});
+			bundle = this.triggerMsg(freq, gate, args);
+			synth.sendBundle(bundle, myLastLatency = latency);
+			// 'this' would exist in susPedalNodes if it was released while susPedal = on
+			// if we re-trigger it during that time, it's no longer 'released'
+			// so we must remove it from the susPedalNodes collection
+			voicer.susPedalNodes.remove(this);
+			NodeWatcher.register(synth.node);
+			// when the synth node dies, I need to set my flags
+			Updater(synth.node, { |syn, msg|
+				(msg == \n_end).if({
+					// synth may have changed
+					(syn == synth).if({
+						reserved = isPlaying = isReleasing = false;
+						synth = nil;
+						this.releaseTime = nil;
+					});
+					syn.releaseDependants;	// remove node and Updater from dependants dictionary
+				});
+			});
+			frequency = freq;	// save frequency for Voicer.release
+			lastTrigger = SystemClock.seconds;	// save time
+			this.isPlaying = true;
+			isReleasing = false;
+		} {
+			reserved = false;
+		}
+	}
+
+	stealNode { |node, latency|
+		synth.notNil.if({
+			this.releaseMsg(-1.025).sendOnTime(node.server, latency)
+		});
+	}
+
+	releaseMsg { arg gate = 0;
+		var bundle = OSCBundle.new;
+		bundle.add(#[error, -1]);
+		synth.releaseToBundle(bundle, gate);
+		bundle.add(#[error, -2])
+		^bundle
+	}
+
+	// release using Env's releaseNode
+	// freq argument is because scheduled releases may be talking to a node that's been stolen.
+	// In that case, the frequency will be different and the release should not happen.
+	// if left nil, the release will go ahead.
+	release { arg gate = 0, latency, freq;
+		this.shouldRelease(freq).if({
+			this.releaseMsg(gate).sendOnTime(synth.server, latency);
+			this.isPlaying = false;
+			isReleasing = true;
+			this.releaseTime = nil;
+			id = 0;
+		});
+	}
+
+	freeMsg {
+		^synth.freeToBundle
+	}
+
+	free {	// remove from server; assumes envelope is already released
+		(this.isPlaying).if({ synth.free });
+		this.isPlaying = false;
+		id = 0;
+	}
+
+	set { arg args, latency;
+		(this.isPlaying).if({
+			this.setMsg(args).sendOnTime(target.server, latency);
+		});
+	}
+	setMsg { arg args;
+		var ar;
+		this.isPlaying.if({
+			// ignore global controls (handled by Voicer.set)
+			args = (args ? []).clump(2)
+			.select({ arg a;
+				// no GCs for set
+				voicer.globalControls.at(a[0].asSymbol).isNil
+				// and no Plugs (maybe fix later)
+				and: { a[1].isKindOf(Plug).not }
+			})
+			.flatten(1);
+			^synth.setToBundle(nil, *args)
+		}, {
+			^nil
+		});
+	}
+
+	makeInitArgs { arg ar;
+		var out;
+		ar.notNil.if({
+			out = Array.new;
+			ar.pairsDo({ |name, value|
+				if(#[\freq, \freqlag, \gate, \t_gate, \out, \outbus].includes(name.asSymbol).not
+					// Buffers are 'noncontrol', per crucial-library
+					and: {
+						#[noncontrol, scalar].includes(value.rate)
+						or: { value.isKindOf(Plug) }
+					}
+				) {
+					out = out ++ [name.asSymbol, value];
+				};
+			});
+		}, {
+			out = Array(initArgDict.size * 2);
+			initArgDict.keysValuesDo({ |name, value| out.add(name).add(value) });
+		});
+		^out
+	}
+}

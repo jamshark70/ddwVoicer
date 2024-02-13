@@ -118,6 +118,9 @@ Voicer {		// collect and manage voicer nodes
 			{ thing.isKindOf(AbstractMIDISender) } {
 				^MIDIVoicerNode(thing, args, this)
 			}
+			{ thing.isKindOf(Syn) } {
+				^SynVoicerNode(thing.source, args, bus, target, addAction, this, defname)
+			}
 
 				// default branch, error
 			{ Error("%: Invalid object to use as instrument. Can't build voicer.".format(thing)).throw }
@@ -793,16 +796,13 @@ Voicer {		// collect and manage voicer nodes
 						~nodes.do({ |node, i|
 							var	freq = ~freq.wrapAt(i), length = ~length.wrapAt(i);
 							if(freq.isRest.not) {
-								~schedBundleArray.(~lag ? 0, timingOffset,
-									node.server,
-									node.server.makeBundle(false, {
-										node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i));
-									})
-								);
+								thisThread.clock.sched(timingOffset, {
+									node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i), if(node.server.latency.notNil) { lag + node.server.latency } { lag });
+								});
 								(length.notNil and: { length != inf }).if({
 									thisThread.clock.sched(length + timingOffset, {
 										voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
-											node.server.latency.notNil.if({ lag + node.server.latency }));
+											node.server.latency.notNil.if({ lag + node.server.latency }, { lag }));
 									});
 								});
 							};
@@ -854,23 +854,21 @@ Voicer {		// collect and manage voicer nodes
 						latency = lag;
 						// backward compatibility: I should NOT add server latency
 						// for newer versions with Julian's schedbundle method
-						if(~addServerLatencyToLag ? false) {
-							latency = latency + (node.server.latency ? 0)
-						};
+						// but now I'm removing that
+						// if(~addServerLatencyToLag ? false) {
+						latency = latency + (node.server.latency ? 0);
+						// };
 						freq = ~freq.wrapAt(i);
 						length = ~sustain.wrapAt(i);
 
 						if(freq.isRest.not) {
-							~schedBundleArray.(latency, ~timingOffset + (i * strum),
-								node.server,
-								node.server.makeBundle(false, {
-									node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i));
-								})
-							);
+							thisThread.clock.sched(timingOffset, {
+								node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i), if(node.server.latency.notNil) { lag + node.server.latency } { lag });
+							});
 							(length.notNil and: { length != inf }).if({
-								thisThread.clock.sched(length + timingOffset + (i * strum), {
+								thisThread.clock.sched(length + timingOffset, {
 									voicer.releaseNode(node, freq, releaseGate.wrapAt(i),
-										node.server.latency.notNil.if({ lag + node.server.latency }));
+										node.server.latency.notNil.if({ lag + node.server.latency }, { lag }));
 								});
 							});
 						};
@@ -923,9 +921,10 @@ Voicer {		// collect and manage voicer nodes
 						latency = lag;
 						// backward compatibility: I should NOT add server latency
 						// for newer versions with Julian's schedbundle method
-						if(~addServerLatencyToLag ? false) {
-							latency = latency + (node.server.latency ? 0)
-						};
+						// but now I'm removing that
+						// if(~addServerLatencyToLag ? false) {
+						latency = latency + (node.server.latency ? 0);
+						// };
 						freq = ~freq.wrapAt(i);
 						length = max(
 							~sustain.wrapAt(i),
@@ -936,20 +935,17 @@ Voicer {		// collect and manage voicer nodes
 						);
 
 						if(freq.isRest.not) {
-							~schedBundleArray.(latency, ~timingOffset + (i * strum),
-								node.server,
-								node.server.makeBundle(false, {
-									if(~forceNew == true) {
-										node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i));
-									} {
-										voicer.prArticulate1(node, freq, nil, ~gate.wrapAt(i), ~args.wrapAt(i),
-											slur: ~accent != true,
-											seconds: seconds
-										);
-									};
-									node.releaseTime = releaseTime;
-								})
-							);
+							thisThread.clock.sched(~timingOffset + (i * strum), inEnvir {
+								if(~forceNew == true) {
+									node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i), latency);
+								} {
+									voicer.prArticulate1(node, freq, nil, ~gate.wrapAt(i), ~args.wrapAt(i), latency,
+										slur: ~accent != true,
+										seconds: seconds
+									);
+								};
+								node.releaseTime = releaseTime;
+							});
 							if(length.notNil and: { length != inf }) {
 								triggerTime = node.lastTrigger;
 								thisThread.clock.sched(length + timingOffset + (i * strum), {
