@@ -945,9 +945,14 @@ Voicer {		// collect and manage voicer nodes
 									);
 								};
 								node.releaseTime = releaseTime;
+								// this can't be done until after the above
+								// technically this is part of 'releasing', below
+								// but below, it would be synchronous
+								// and the above is scheduled
+								triggerTime = node.lastTrigger;
+								nil  // scheduled function, do not exit with a number
 							});
 							if(length.notNil and: { length != inf }) {
-								triggerTime = node.lastTrigger;
 								thisThread.clock.sched(length + timingOffset + (i * strum), {
 									if(node.lastTrigger == triggerTime) {
 										node.releaseTime = releaseTime;
