@@ -684,7 +684,10 @@ MIDIVoicerNode : SynthVoicerNode {
 
 	reserved_ { |bool = false|
 		reserved = bool;
-		if(bool) { synth = Synth.basicNew(\dummy, Server.default) };
+		// for some reason that I forget, a MIDIVoicerNode needs to have
+		// a synth to be fully reserved -- but there's no server node for it
+		// so 0xFFFFFFFF prevents the server's node allocator from wasting a node ID for it
+		if(bool) { synth = Synth.basicNew(\dummy, Server.default, 0xFFFFFFFF) };
 	}
 
 	freeMsg {
