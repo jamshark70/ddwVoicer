@@ -742,7 +742,7 @@ MIDIVoicerNode : SynthVoicerNode {
 
 SynVoicerNode : SynthVoicerNode {
 	triggerMsg { arg freq, gate = 1, args;
-		var args2;
+		var args2, gcs;
 		var plugKey, plug;
 		var fixPlug = { |args, key, value, i|
 			// in case we're in an event
@@ -769,11 +769,19 @@ SynVoicerNode : SynthVoicerNode {
 				fixPlug.(args, key, value, i);
 			};
 		};
+
 		(args.notEmpty).if({ args2 = args2 ++ args.select(_.notNil) });
 		// this may need to change for freq plugs
 		freq.notNil.if({ args2 = args2 ++ [\freq, freq] });
 		fixPlug.(args2, \freq, freq, args2.size - 2);
-		args2 = args2 ++ this.mapArgs ++ [\out, bus.index, \outbus, bus.index];
+
+		// experimental 24-0419: are there any plugs for GCs?
+		gcs = this.mapArgs;
+		gcs.pairsDo { |key, value, i|
+			fixPlug.(gcs, key, value, i);
+		};
+
+		args2 = args2 ++ gcs ++ [\out, bus.index, \outbus, bus.index];
 		// make synth object
 		synth = Syn.basicNew(defname, args2, target, addAction);
 		// note, no multichannel expansion here
