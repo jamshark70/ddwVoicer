@@ -533,7 +533,10 @@ Voicer {		// collect and manage voicer nodes
 								// used to add synthdef default explicitly (c.defaultValue)
 								// but that breaks t_gate, so now adding only values
 								// that exist in the event or have Voicer-specific defaults
-							if(value.notNil) {
+								// 24-0419: globalControls check is mildly experimental
+								// 'trigger' will override any event value here
+								// (cost is low b/c IdentityDictionary lookup is fast)
+							if(value.notNil and: { globalControls[cname].isNil }) {
 								argList.add(cname).add(value)
 							};
 						};
@@ -795,9 +798,10 @@ Voicer {		// collect and manage voicer nodes
 
 						~nodes.do({ |node, i|
 							var	freq = ~freq.wrapAt(i), length = ~length.wrapAt(i);
+							var gate = ~gate.wrapAt(i), args = ~args.wrapAt(i);
 							if(freq.isRest.not) {
 								thisThread.clock.sched(timingOffset, {
-									node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i), if(node.server.latency.notNil) { lag + node.server.latency } { lag });
+									node.trigger(freq, gate, args, if(node.server.latency.notNil) { lag + node.server.latency } { lag });
 								});
 								(length.notNil and: { length != inf }).if({
 									thisThread.clock.sched(length + timingOffset, {
@@ -849,7 +853,7 @@ Voicer {		// collect and manage voicer nodes
 					voicer.setArgsInEvent(currentEnvironment);
 
 					~nodes.do({ |node, i|
-						var latency, freq, length;
+						var latency, freq, length, gate, args;
 
 						latency = lag;
 						// backward compatibility: I should NOT add server latency
@@ -860,10 +864,12 @@ Voicer {		// collect and manage voicer nodes
 						// };
 						freq = ~freq.wrapAt(i);
 						length = ~sustain.wrapAt(i);
+						gate = ~gate.wrapAt(i);
+						args = ~args.wrapAt(i);
 
 						if(freq.isRest.not) {
 							thisThread.clock.sched(timingOffset, {
-								node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i), if(node.server.latency.notNil) { lag + node.server.latency } { lag });
+								node.trigger(freq, gate, args, if(node.server.latency.notNil) { lag + node.server.latency } { lag });
 							});
 							(length.notNil and: { length != inf }).if({
 								thisThread.clock.sched(length + timingOffset, {
