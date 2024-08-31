@@ -576,8 +576,24 @@ InstrVoicerNode : SynthVoicerNode {
 }
 
 MIDIVoicerNode : SynthVoicerNode {
+	classvar fakeSynthDesc;
 	var midichannel = 0, lastVelocity, noteOffMsg;
 	var noteFunc;
+
+	*initClass {
+		var cn = [
+			ControlName(\freq, 0, \control, 440),
+			ControlName(\amp, 1, \control, 0.5),
+			ControlName(\acc, 2, \control, 0),
+			ControlName(\accAmt, 3, \control, 0.3)
+		];
+		var cd = IdentityDictionary.new;
+		cn.do { |cn| cd.put(cn.name, cn) };
+		fakeSynthDesc = SynthDesc()
+		.controls_(cn)
+		.controlNames_(cn.collect(_.name))
+		.controlDict_(cd);
+	}
 
 	*new { arg thing, args, voicer;
 		// note: voicer arg is called 'voicer' in the superclass
@@ -590,15 +606,21 @@ MIDIVoicerNode : SynthVoicerNode {
 		var chanIndex;
 		voicer = par;
 		noteFunc = { |note| note };
+		initArgDict = IdentityDictionary[\accAmt -> 0.2];
 		ar.tryPerform(\pairsDo) { |key, value|
 			switch(key)
 			{ \chan } {
+				initArgDict.put(key, value);
 				midichannel = value;
 			}
 			{ \int } {
+				initArgDict.put(key, value);
 				if(value.asBoolean) {
 					noteFunc = { |note| note.round.asInteger }
 				}
+			}
+			{ \accAmt } {
+				initArgDict.put(key, value);
 			}
 		};
 		// this object handles note messages only
@@ -616,10 +638,15 @@ MIDIVoicerNode : SynthVoicerNode {
 
 	trigger { arg freq, gate = 1, args, latency;
 		var bundle;
+		var acc = 0, accAmt = 1;
 		if(freq.isValidVoicerArg) {
 			if(this.shouldSteal) {
 				this.stealNode(frequency, latency);
 			};
+			if(args.size > 1) {
+				#acc, accAmt = args.findPairKeys(#[acc, accAmt], #[0, 1]);
+			};
+			if(acc > 0) { gate = (gate * (accAmt + 1)).clip(0, 1) };
 			defname.play(noteFunc.(freq.cpsmidi), (gate * 127).asInteger);
 			// 'this' would exist in susPedalNodes if it was released while susPedal = on
 			// if we re-trigger it during that time, it's no longer 'released'
@@ -731,7 +758,7 @@ MIDIVoicerNode : SynthVoicerNode {
 		};
 	}
 	setArgDefaults {}
-	getSynthDesc { ^nil }
+	getSynthDesc { ^fakeSynthDesc }
 
 	// not really applicable but something upstream will complain if I don't...
 	server { ^Server.default }
