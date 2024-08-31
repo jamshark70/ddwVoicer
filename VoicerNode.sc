@@ -96,7 +96,7 @@ SynthVoicerNode {
 		(args.at(0).notNil).if({ args2 = args2 ++ args });
 		freq.notNil.if({ args2 = args2 ++ [\freq, freq] });
 		// make synth object
-		synth = Synth.basicNew(defname, target.server);
+		synth = Synth.basicNew(this.asDefName, target.server);
 		bundle.add(synth.newMsg(target, args2.asOSCArgArray ++ this.mapArgs
 			++ [\out, bus.index, \outbus, bus.index], addAction));
 		^bundle
@@ -260,7 +260,12 @@ SynthVoicerNode {
 
 	// nil if SynthDesc not found
 	getSynthDesc { |synthLib|
-		^(synthLib ?? { SynthDescLib.global }).tryPerform(\at, defname.asSymbol)
+		^(synthLib ?? { SynthDescLib.global }).tryPerform(\at, this.asDefName.asSymbol)
+	}
+	// 24-0831 new feature: allow an event to override the SynthVoicerNode's defname
+	asDefName {
+		var instr = \instrument.envirGet;
+		^if(instr != \default) { instr } { defname }
 	}
 
 	// GENERAL SUPPORT METHODS
@@ -813,7 +818,7 @@ SynVoicerNode : SynthVoicerNode {
 
 		args2 = args2 ++ gcs ++ [\out, bus.index, \outbus, bus.index];
 		// make synth object
-		synth = Syn.basicNew(defname, args2, target, addAction);
+		synth = Syn.basicNew(this.asDefName, args2, target, addAction);
 		// note, no multichannel expansion here
 		// mc-expansion is handled in voicerNote events
 		^synth.prepareToBundle;

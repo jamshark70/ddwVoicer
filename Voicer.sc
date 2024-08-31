@@ -868,7 +868,7 @@ Voicer {		// collect and manage voicer nodes
 						args = ~args.wrapAt(i);
 
 						if(freq.isRest.not) {
-							thisThread.clock.sched(timingOffset, {
+							thisThread.clock.sched(timingOffset, inEnvir {
 								node.trigger(freq, gate, args, if(node.server.latency.notNil) { lag + node.server.latency } { lag });
 							});
 							(length.notNil and: { length != inf }).if({
