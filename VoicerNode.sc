@@ -120,7 +120,7 @@ SynthVoicerNode {
 			NodeWatcher.register(synth);
 			// when the synth node dies, I need to set my flags
 			watcher = SimpleController(synth)
-			.put(\n_end, {
+			.put(\n_end, { |syn|
 				// synth may have changed
 				if(syn == synth) {
 					reserved = isPlaying = isReleasing = false;
@@ -395,7 +395,7 @@ InstrVoicerNode : SynthVoicerNode {
 		NodeWatcher.register(synth);  // we now have a synth object too
 		// when the synth node dies, I need to set my flags
 		watcher = SimpleController(synth)
-		.put(\n_end, {
+		.put(\n_end, { |syn|
 			// synth may have changed
 			if(syn == synth) {
 				reserved = isPlaying = isReleasing = false;
