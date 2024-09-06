@@ -106,7 +106,7 @@ SynthVoicerNode {
 	// InstrVoicerNode uses this
 
 	trigger { arg freq, gate = 1, args, latency;
-		var bundle;
+		var bundle, watcher;
 		if(freq.isValidVoicerArg) {
 			this.shouldSteal.if({
 				this.stealNode(synth, latency);
@@ -119,16 +119,15 @@ SynthVoicerNode {
 			voicer.susPedalNodes.remove(this);
 			NodeWatcher.register(synth);
 			// when the synth node dies, I need to set my flags
-			Updater(synth, { |syn, msg|
-				(msg == \n_end).if({
-					// synth may have changed
-					(syn == synth).if({
-						reserved = isPlaying = isReleasing = false;
-						synth = nil;
-						this.releaseTime = nil;
-					});
-					syn.releaseDependants;	// remove node and Updater from dependants dictionary
-				});
+			watcher = SimpleController(synth)
+			.put(\n_end, {
+				// synth may have changed
+				if(syn == synth) {
+					reserved = isPlaying = isReleasing = false;
+					synth = nil;
+					this.releaseTime = nil;
+				};
+				watcher.remove;
 			});
 			frequency = freq;	// save frequency for Voicer.release
 			lastTrigger = SystemClock.seconds;	// save time
@@ -265,7 +264,7 @@ SynthVoicerNode {
 	// 24-0831 new feature: allow an event to override the SynthVoicerNode's defname
 	asDefName {
 		var instr = \instrument.envirGet;
-		^if(instr != \default) { instr } { defname }
+		^if(instr.notNil and: { instr != \default }) { instr } { defname }
 	}
 
 	// GENERAL SUPPORT METHODS
@@ -386,7 +385,7 @@ InstrVoicerNode : SynthVoicerNode {
 	}
 
 	triggerMsg { arg freq, gate = 1, args;
-		var bundle;
+		var bundle, watcher;
 		bundle = Array.new;
 		// make messages for children
 		children.do({ arg child; bundle = bundle ++ child.triggerMsg(freq, gate, args); });
@@ -395,16 +394,16 @@ InstrVoicerNode : SynthVoicerNode {
 		// super.triggerMsg also handles global mapping
 		NodeWatcher.register(synth);  // we now have a synth object too
 		// when the synth node dies, I need to set my flags
-		Updater(synth, { |syn, msg|
-			(msg == \n_end).if({
-				(syn == synth).if({
-					reserved = isPlaying = isReleasing = false;
-					synth = releaseTime = nil;
-				});
-				syn.releaseDependants;	// remove node and Updater from dependants dictionary
-			});
+		watcher = SimpleController(synth)
+		.put(\n_end, {
+			// synth may have changed
+			if(syn == synth) {
+				reserved = isPlaying = isReleasing = false;
+				synth = nil;
+				this.releaseTime = nil;
+			};
+			watcher.remove;
 		});
-
 		this.isPlaying = true;
 		isReleasing = false;
 		^bundle
@@ -776,6 +775,13 @@ MIDIVoicerNode : SynthVoicerNode {
 }
 
 SynVoicerNode : SynthVoicerNode {
+	var newMethod = \basicNew;
+
+	usePaths { ^newMethod == \basicNewByArgPaths }
+	usePaths_ { |bool|
+		newMethod = #[basicNew, basicNewByArgPaths][bool.binaryValue]
+	}
+
 	triggerMsg { arg freq, gate = 1, args;
 		var args2, gcs;
 		var plugKey, plug;
@@ -818,7 +824,7 @@ SynVoicerNode : SynthVoicerNode {
 
 		args2 = args2 ++ gcs ++ [\out, bus.index, \outbus, bus.index];
 		// make synth object
-		synth = Syn.basicNew(this.asDefName, args2, target, addAction);
+		synth = Syn.perform(newMethod, this.asDefName, args2, target, addAction);
 		// note, no multichannel expansion here
 		// mc-expansion is handled in voicerNote events
 		^synth.prepareToBundle;
@@ -828,7 +834,7 @@ SynVoicerNode : SynthVoicerNode {
 	// InstrVoicerNode uses this
 
 	trigger { arg freq, gate = 1, args, latency;
-		var bundle;
+		var bundle, watcher;
 		if(freq.isValidVoicerArg) {
 			this.shouldSteal.if({
 				this.stealNode(synth, latency);
@@ -839,18 +845,14 @@ SynVoicerNode : SynthVoicerNode {
 			// if we re-trigger it during that time, it's no longer 'released'
 			// so we must remove it from the susPedalNodes collection
 			voicer.susPedalNodes.remove(this);
-			NodeWatcher.register(synth.node);
-			// when the synth node dies, I need to set my flags
-			Updater(synth.node, { |syn, msg|
-				(msg == \n_end).if({
-					// synth may have changed
-					(syn == synth).if({
-						reserved = isPlaying = isReleasing = false;
-						synth = nil;
-						this.releaseTime = nil;
-					});
-					syn.releaseDependants;	// remove node and Updater from dependants dictionary
-				});
+			watcher = SimpleController(synth)
+			.put(\didFree, { |syn|
+				if(syn === synth) {
+					reserved = isPlaying = isReleasing = false;
+					synth = nil;
+					this.releaseTime = nil;
+				};
+				watcher.remove;
 			});
 			frequency = freq;	// save frequency for Voicer.release
 			lastTrigger = SystemClock.seconds;	// save time

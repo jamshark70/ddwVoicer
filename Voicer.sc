@@ -518,7 +518,10 @@ Voicer {		// collect and manage voicer nodes
 						c.rate != \noncontrol and:
 							{ #[freq, gate, out, i_out, outbus].includes(c.name.asSymbol).not }
 					});
-					argList = Array(controls.size * 2);
+					argList = Array((controls.size + ~forceArgs.size) * 2);
+					~forceArgs.tryPerform(\keysValuesDo, { |key, value|
+						argList.add(key).add(value);
+					});
 					controls.do({ |c|
 						cname = c.name.asSymbol;
 						if(cname != '?') {
