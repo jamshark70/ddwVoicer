@@ -82,7 +82,7 @@ SynthVoicerNode {
 	// testArgClass { |argValue| ^argValue.asTestUGenInput.isValidSynthArg }
 
 	triggerMsg { arg freq, gate = 1, args;
-		var bundle, args2;
+		var bundle, args2, defname2;
 		// create osc message
 		bundle = List.new;
 		// assemble arguments
@@ -95,8 +95,14 @@ SynthVoicerNode {
 		};
 		(args.at(0).notNil).if({ args2 = args2 ++ args });
 		freq.notNil.if({ args2 = args2 ++ [\freq, freq] });
+		// override SynthDef name
+		if(args2.includes(\instrument), {
+			defname2 = args2.asDict.at(\instrument);
+		}, {
+			defname2 = defname;
+		});
 		// make synth object
-		synth = Synth.basicNew(defname, target.server);
+		synth = Synth.basicNew(defname2, target.server);
 		bundle.add(synth.newMsg(target, args2.asOSCArgArray ++ this.mapArgs
 			++ [\out, bus.index, \outbus, bus.index], addAction));
 		^bundle
