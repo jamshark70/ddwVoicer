@@ -653,6 +653,14 @@ Voicer {		// collect and manage voicer nodes
 	}
 
 // BOOKKEEPING:
+	controlNames {
+		var out;
+		nodes.do { |n|
+			out = n.controlNames.addAll(out);  // union
+		};
+		^out
+	}
+
 	free {
 			// activates onClose which frees the gui
 		nodes.do(_.dtor);	// clean up stuff

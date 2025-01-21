@@ -78,6 +78,15 @@ SynthVoicerNode {
 
 	initArgAt { |name| ^initArgDict[name.asSymbol] }
 
+	controlNames {
+		var desc = SynthDescLib.at(this.asDefName);
+		^if(desc.notNil) {
+			IdentitySet.new.addAll(desc.controlNames)
+		} {
+			IdentitySet.new
+		}
+	}
+
 	// this test is split out of the above in case future subclasses need a different test
 	// testArgClass { |argValue| ^argValue.asTestUGenInput.isValidSynthArg }
 
@@ -772,6 +781,7 @@ MIDIVoicerNode : SynthVoicerNode {
 	mapArgsMsg {}
 	mapArgs {}
 	displayName { ^defname.asString }
+	controlNames { ^IdentitySet.new }
 }
 
 SynVoicerNode : SynthVoicerNode {
@@ -921,6 +931,15 @@ SynVoicerNode : SynthVoicerNode {
 			^synth.setToBundle(nil, *args)
 		}, {
 			^nil
+		});
+	}
+
+	map { arg name, bus;	// do mapping for this node
+		synth.notNil.if({
+			// Syn doesn't (yet?) do .map directly
+			// for some reason I can't recall, I'm passing in
+			// only the bus number, not the Bus object... :|
+			synth.set(name, "c" ++ bus);
 		});
 	}
 
