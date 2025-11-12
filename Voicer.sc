@@ -412,8 +412,17 @@ Voicer {		// collect and manage voicer nodes
 				prev.lastTrigger = SystemClock.seconds;
 			} {
 				saveID = prev.id;  // must do this before 'release'!
-				prev.release(-1.008, latency: lat);  // -1 to suppress previous release envelope
 				steal = prev.steal;
+				// it is possible to get here if prev is playing *and* releasing
+				// (though if it's releasing, isPlaying should be false)
+				// in any case, stealable nodes should forcibly cut off,
+				// and `release` does not do this if isPlaying is false
+				// this fixes an arpeggiator case where synths had a long release time
+				if(steal and: { prev.isPlaying.not }) {
+					prev.stealNode(prev, lat);
+				} {
+					prev.release(-1.008, latency: lat);  // -1 to suppress previous release envelope
+				};
 				prev.steal = false;
 				prev.trigger(freq, gate, args, lat);
 				prev.steal = steal;
@@ -519,8 +528,15 @@ Voicer {		// collect and manage voicer nodes
 							{ #[freq, gate, out, i_out, outbus].includes(c.name.asSymbol).not }
 					});
 					argList = Array((controls.size + ~forceArgs.size) * 2);
+					// forceArgs as dictionary is used for composite instruments
+					// but you may also want to forceArgs from the main event
+					// so we'll use a Ref to anything as a sentinel for that
 					~forceArgs.tryPerform(\keysValuesDo, { |key, value|
-						argList.add(key).add(value);
+						if(value.isKindOf(Ref)) {
+							argList.add(key).add(key.envirGet)
+						} {
+							argList.add(key).add(value);
+						};
 					});
 					controls.do({ |c|
 						cname = c.name.asSymbol;
