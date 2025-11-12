@@ -641,7 +641,7 @@ MIDIVoicerNode : SynthVoicerNode {
 						// this should map onto 1/4 of full PB range
 						// also: MIDIBendMessage expects -8192 <= x < 8192
 						// *unlike* MIDIOut, so do not add 8192
-						bend = ((note - midinote) * 2047).round.asInteger.debug("bend");
+						bend = ((note - midinote) * 2047).round.asInteger;
 						midinote
 					};
 				}
