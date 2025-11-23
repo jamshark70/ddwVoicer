@@ -104,26 +104,46 @@ Voicer {		// collect and manage voicer nodes
 	}
 
 	makeNode { arg thing, args, defname;
+		var type, object;
 			// strings/symbols: treat as defname
+		object = thing;
 		case
-			{ thing.isString or: { thing.isSymbol } } {
-				^SynthVoicerNode.new(thing, args, bus, target, addAction, this, defname);
-			}
+		{ thing.isKindOf(Association) } {
+			type = thing.key;
+			object = thing.value;
+		}
+		{ thing.isString or: { thing.isSymbol } } {
+			type = \synth;
+		}
+		{ thing.isKindOf(Instr) or: { thing.class.name == 'WrapInstr' } } {
+			type = \instr;
+		}
+		// MIDIOut no longer supported
+		{ thing.isKindOf(AbstractMIDISender) } {
+			type = \midi;
+		}
+		{ thing.isKindOf(Syn) } {
+			type = \syn;
+			object = thing.source;
+		};
 
-			{ thing.isKindOf(Instr) or: { thing.class.name == 'WrapInstr' } } {
-				^InstrVoicerNode.new(thing, args, bus, target, addAction, this, defname);
-			}
-
-			// MIDIOut no longer supported
-			{ thing.isKindOf(AbstractMIDISender) } {
-				^MIDIVoicerNode(thing, args, this)
-			}
-			{ thing.isKindOf(Syn) } {
-				^SynVoicerNode(thing.source, args, bus, target, addAction, this, defname)
-			}
-
-				// default branch, error
-			{ Error("%: Invalid object to use as instrument. Can't build voicer.".format(thing)).throw }
+		switch(type)
+		{ \synth } {
+			^SynthVoicerNode.new(object, args, bus, target, addAction, this, defname);
+		}
+		{ \instr } {
+			^InstrVoicerNode.new(object, args, bus, target, addAction, this, defname);
+		}
+		{ \midi } {
+			^MIDIVoicerNode(object, args, this)
+		}
+		{ \syn } {
+			^SynVoicerNode(object, args, bus, target, addAction, this, defname)
+		}
+		// default branch, error
+		// we do this here because you might specify \wrongtype -> something
+		// which would not fall through to the error branch in 'case' above
+		{ Error("%: Invalid object to use as instrument. Can't build voicer.".format(thing)).throw };
 	}
 
 // SUPPORT METHODS FOR NODE LOCATORS:
