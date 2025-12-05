@@ -709,9 +709,9 @@ MIDIVoicerNode : SynthVoicerNode {
 
 	// must pass in (synth) node because, when a node is stolen, my synth variable has changed
 	// to the new node, not the old one that should go away
-	stealNode { |freq, latency|
-		if(freq.notNil) {
-			noteOffMsg.play(noteFunc.(freq.cpsmidi));
+	stealNode { |node, latency|
+		if(frequency.notNil) {
+			noteOffMsg.play(noteFunc.(frequency.cpsmidi));
 		}
 	}
 
@@ -748,10 +748,14 @@ MIDIVoicerNode : SynthVoicerNode {
 
 	reserved_ { |bool = false|
 		reserved = bool;
+
 		// for some reason that I forget, a MIDIVoicerNode needs to have
 		// a synth to be fully reserved -- but there's no server node for it
 		// so 0xFFFFFFFF prevents the server's node allocator from wasting a node ID for it
-		if(bool) { synth = Synth.basicNew(\dummy, Server.default, 0xFFFFFFFF) };
+		if(bool) {
+			lastTrigger = SystemClock.seconds;
+			synth = Synth.basicNew(\dummy, Server.default, 0xFFFFFFFF)
+		};
 	}
 
 	freeMsg {
@@ -899,7 +903,7 @@ SynVoicerNode : SynthVoicerNode {
 
 	stealNode { |node, latency|
 		synth.notNil.if({
-			this.releaseMsg(-1.025).sendOnTime(node.server, latency)
+			node.releaseMsg(0.025).sendOnTime(node.server, latency)
 		});
 	}
 
