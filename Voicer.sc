@@ -439,7 +439,7 @@ Voicer {		// collect and manage voicer nodes
 				// and `release` does not do this if isPlaying is false
 				// this fixes an arpeggiator case where synths had a long release time
 				if(steal and: { prev.isPlaying.not }) {
-					prev.stealNode(prev, lat);
+					prev.stealNode(prev.synth, lat);
 				} {
 					prev.release(-1.008, latency: lat);  // -1 to suppress previous release envelope
 				};
