@@ -592,6 +592,8 @@ MIDIVoicerNode : SynthVoicerNode {
 	classvar fakeSynthDesc;
 	var midichannel = 0, lastVelocity, noteOffMsg, bendMsg;
 	var noteFunc, bend = nil;
+	var mpe = false;
+	var bendHack = false;
 
 	*initClass {
 		var cn = [
@@ -617,6 +619,8 @@ MIDIVoicerNode : SynthVoicerNode {
 	// most are ignored
 	init { |th, ar, b, targ, addAct, par|
 		var chanIndex;
+		// var mpe = false;  // Voicer(n, aMIDISender, [mpe: true])
+		var mpeBendNoteScale = 8192/48;
 		voicer = par;
 		noteFunc = { |note| bend = nil; note };
 		initArgDict = IdentityDictionary[\accAmt -> 0.2];
@@ -634,21 +638,29 @@ MIDIVoicerNode : SynthVoicerNode {
 			}
 			{ \mpe } {
 				if(value.asBoolean) {
+					mpe = true;
 					noteFunc = { |note|
 						var midinote = note.round.asInteger;
-						// assuming bend range = 2 semitones
+						// assuming bend range = 48 semitones (MPE spec)
+						// I should make that configurable
 						// -0.5 <= fractional part < 0.5
 						// this should map onto 1/4 of full PB range
 						// also: MIDIBendMessage expects -8192 <= x < 8192
 						// *unlike* MIDIOut, so do not add 8192
-						bend = ((note - midinote) * 2047).round.asInteger;
+						bend = ((note - midinote) * mpeBendNoteScale).round.asInteger;
 						midinote
 					};
 				}
 			}
+			{ \mpeChannel } {
+				if(mpe) { midichannel = value };
+			}
+			{ \bendHack } {
+				bendHack = value.asBoolean;
+			}
 			{ \accAmt } {
 				initArgDict.put(key, value);
-			}
+			};
 		};
 		// this object handles note messages only
 		defname = MIDINoteMessage(
@@ -663,7 +675,7 @@ MIDIVoicerNode : SynthVoicerNode {
 		bendMsg = MIDIBendMessage(
 			value: 0,
 			channel: midichannel, device: th,
-			latency: Server.default.latency
+			latency: if(bendHack) { nil } { Server.default.latency }
 		);
 		lastVelocity = 64;
 	}
@@ -682,7 +694,7 @@ MIDIVoicerNode : SynthVoicerNode {
 			if(acc > 0) { gate = (gate * (accAmt + 1)).clip(0, 1) };
 			midinote = noteFunc.(freq.cpsmidi);
 			if(bend.notNil) {
-				bendMsg.play(bend)
+				this.bend(bend) // bendMsg.play(bend)
 			};
 			defname.play(midinote, (gate * 127).asInteger);
 			// 'this' would exist in susPedalNodes if it was released while susPedal = on
@@ -702,7 +714,7 @@ MIDIVoicerNode : SynthVoicerNode {
 		^steal and: {
 			isPlaying or: {
 				// not sure
-				SystemClock.seconds - lastTrigger < (myLastLatency ? 0)
+				(SystemClock.seconds - lastTrigger) < (myLastLatency ? 0)
 			}
 		}
 	}
@@ -789,6 +801,9 @@ MIDIVoicerNode : SynthVoicerNode {
 						vel = lastVelocity;
 					};
 					defname.play(note, vel);
+					if(bend.notNil) {
+						this.bend(bend) // bendMsg.play(bend)
+					};
 					SystemClock.sched(0.01, {
 						if(this.releaseCheckNote(oldNote)) {
 							noteOffMsg.play(oldNote);
@@ -800,6 +815,19 @@ MIDIVoicerNode : SynthVoicerNode {
 	}
 	setArgDefaults {}
 	getSynthDesc { ^fakeSynthDesc }
+
+	bend { |bend = 0|
+		if(bendHack) {
+			fork {
+				30.do { |offset|
+					bendMsg.play((bend + 8000.rand2).clip(-8000, 8000));
+					0.05.wait;
+				}
+			}
+		} {
+			bendMsg.play(bend)
+		}
+	}
 
 	// not really applicable but something upstream will complain if I don't...
 	server { ^Server.default }
