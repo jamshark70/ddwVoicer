@@ -730,9 +730,11 @@ MIDIVoicerNode : SynthVoicerNode {
 	// releaseTime_ {}
 
 	releaseCheckNote { |oldNote|
-		^voicer.nodes.every { |node|
-			node === this or: {
-				node.isPlaying.not or: { (noteFunc.(node.frequency.cpsmidi) != oldNote) }
+		^mpe or: {
+			voicer.nodes.every { |node|
+				node === this or: {
+					node.isPlaying.not or: { (noteFunc.(node.frequency.cpsmidi) != oldNote) }
+				}
 			}
 		}
 	}
