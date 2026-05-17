@@ -1,253 +1,455 @@
 title:: Using Voicer 
-summary:: An introduction to the DDW Voicer class written by H. James Harkins, jamshark70@gmail.com
+summary:: An introduction to the DDW Voicer class
 categories:: Guides>Voicer
 keyword:: Voicer
 
 description:: 
 
-This Guide contains information about using DDW Voicer. It organizes Voicer methods into three functional groupings: Playing, Controlling and Sequencing. For a complete description of Voicer’s features, Class and Instance methods, along with addition example code, please refer to the link::Classes/Voicer##Voicer:: Class entry.
+This Guide contains information about using DDW Voicer, treating each successive target type in turn. For a complete description of Voicer’s features, Class and Instance methods, along with addition example code, please refer to the link::Classes/Voicer##Voicer:: Class entry.
 
-section:: Playing
+section:: Playing synths
 
-method:: set
-
-Sends the same /n_set message to each node in this voicer. Global controls (see below) send the value to the associated kr bus.
-
-argument:: args
-can be a single argument array, such as [\ffreq, 10000], or an array of arg arrays: [ [\ffreq, 10000], [\ffreq, 15000] ]. 
-
-argument:: lat
-Server latency -- see trigger1 / trigger below.
-
-method:: trigger1, trigger(freq, gate = 1, args, lat) 
-
-Trigger a note (trigger1), or several notes (trigger). For trigger1, freq must be a float or int. For trigger, freq can be a single value or a collection. If you are triggering several notes, args can also be a collection of argument arrays e.g. [ [\filter, 300], [\filter, 500], [\filter, 700] ]. Each set of args will be sent in succession to the nodes as they're triggered (using wrapAt). In this case, the first node triggered will get \filter = 300, the second \filter = 500, etc.
-
-code:: 
-trigger1(freq, gate = 1, args, lat)
-trigger(freq, gate = 1, args, lat) 
-::
-
-lat is the Server latency to use for this event. The following values are allowed for all methods with a "lat" argument:
-
-definitionlist::
-## < 0 : 
-|| Use the Voicer's default latency (set by myVoicer.latency = 1)
-
-## >= 0 :
-|| Non-negative number: use this number as the latency for this event
-
-## nil :	
-|| No latency: Server will play the message as soon as received
-::
-
-method:: release1, release(freq, lat)
-
-Returns the node played, or a collection of nodes played.
-
-code::
-release1(freq, lat)
-release(freq, lat) 
-::
-
-method:: gate1, gate(freq, dur, gate = 1, args, lat)
-
-Find the earliest-triggered note(s) with the frequency/frequencies given and send [\gate,0] to it. release1 allows only one frequency to be given; release works with either a single value or a collection. If there is no node with a given frequency, that frequency is ignored. 
-
-Returns the node(s) released.
-
-code::
-v = Voicer.new(8, "harpsi");  // uses Server.local
-f = Array.fill(5, { 1000.0.rand + 50 });
-v.trigger(f);  // play 5 notes
-v.release(f);  // release the same
-gate1(freq, dur, gate = 1, args, lat)
-gate(freq, dur, gate = 1, args, lat) 
-::
-
-Triggers the notes and schedules their releases. If freq is a collection, dur and args may be the same thing for every node, or you can supply collections to have different arguments and different release times for each node. 
-
-Returns the node(s) played.
-
-code::
-f = Array.fill(5, { 1000.0.rand + 50 });
-  // listen to the notes stop one by one
-v.gate(f, Array.fill(5, { arg i; 2*(i+1) }));
-::
-
-method:: releaseNow1, releaseNow(freq, sec)
-
-Uses a negative gate to cause an instant release. Sec determines how long the release takes. Unlike gate, you may not supply a collection for sec. (Sec is converted to the negative gate by sec.abs.neg-1)
-
-section:: Controlling 
-
-method:: panic
-
-Stops all active Synths belonging to this Voicer immediately.
-
-method:: trace
-
-Sends the n_trace message to all active Synths. Useful for debugging SynthDefs. You can also trace a single playing node using the following:
-
-code::
-aVoicer.playingNodes.choose.trace;
-::
-
-method:: gui
-
-Makes a window showing all global controls (see mapGlobal) and processes (see addProcess).
-
-Voicer-gui uses a proxy system so that you can display different voicers without incurring the overhead of removing views, resizing the window, adding views, and resizing again. For normal use, this process is transparent to the user. To change the Voicer shown in a particular GUI, drag an expression that evaluates to the Voicer (usually a variable name) into the drag sink immediately to the right of the Voicer GUI label.
-
-
-method:: mapGlobal, unmapGlobal(name, bus)
-
-Makes an input to the Synth global, by using the supplied kr bus (or creating a new one if no bus is supplied) and mapping the input to that bus in each Voicer node. Newly triggered Voicer nodes will be mapped automatically. This lets you control filter cutoff frequencies, pitch bends, etc. globally for all nodes in a voicer. A kr Synth can be played on the bus to provide an LFO.
+For MIDI velocity support, this SynthDef receives amplitude on the gate parameter. code::gate:: is normally set to 0 at the end of the note, so we Latch it when applying to the amplitude.
 
 code::
 (
-i = Instr([\harpsi], {
-	arg freq = 440, gate = 0;
-	var out;
-	out = EnvGen.ar(Env.adsr, gate, doneAction:2) *
-	Pulse.ar(freq, 0.25, 0.25);
-	[out,out]
-}/*, [\freq, \amp]*/);
-
-f = Instr([\test, \rlpf], {
-	arg audio, ffreq = 500, rq = 0.1;
-	RLPF.ar(audio, ffreq, rq);
-});
-
-v = Voicer(8, f, [\audio, i, nil, \ffreq, 5000, \rq, 0.08]);
-)
-
-// globalize the filter cutoff
-b = v.mapGlobal(\ffreq);
-::
-code::
-
-(
-SynthDef.new("SinLFO", {	// sinewave lfo
-	arg outbus, freq = 1, phase = 0, mul = 1, add = 0;
-	ReplaceOut.kr(outbus, SinOsc.kr(freq, phase, mul, add));
+SynthDef(\moogy, { |out, freq = 440, detun = 1.008, gate = 1,
+	ffreq = 2000, gain = 2, fEgAmt = 4, pan = 0,
+	freqlag = 0.08|
+	var eg = EnvGen.kr(Env.adsr(0.01, 0.2, 0.6, 0.09), gate, doneAction: 2);
+	var feg = EnvGen.kr(Env([0, 1, 0], [0.01, 0.2], -4), gate);
+	var sig = Saw.ar(Lag.kr(freq, freqlag) * [1, detun]).sum;
+	ffreq = ffreq * (fEgAmt * (1 + feg));
+	sig = MoogFF.ar(sig, ffreq.clip(20, 20000), gain);
+	Out.ar(out, Pan2.ar(sig, pan, eg * Latch.kr(gate, gate)));
 }).add;
 )
 
-l = Synth.new("SinLFO", [\freq, 0.2, \mul, 500, \add, 1400, \outbus, b.index]);
+v = Voicer(5, \moogy, [ffreq: 5000, gain: 2.5]);
 
-// all notes have the same filter LFO
+v.gate(220, 1.5, 0.1, [gain: 1]);
 
-v.trigger([60, 64, 67].midicps);
-v.unmapGlobal(\ffreq);  // LFO stops
-v.mapGlobal(\ffreq, b); // set LFO to bus (which is still active)
-v.release([60, 64, 67].midicps);
-l.free;
+MIDIPort.init;
+
+k = VoicerMIDISocket([deviceIndex, channel], v);
+
+// play your keyboard
+
+k.free;
 ::
 
-method:: addProcess(states, type)
-
-Adds a VoicerProcessGroup to this Voicer. The group will be displayed as a button or pop-up menu in the voicer's GUI. For a button, specify type as \toggle in the addProcess message. See the VoicerProcessGroup help file for the correct syntax for states. Returns the new process group.
-
-This allows you to add graphically triggered sequencers and other processes directly to the Voicer GUI.
-
-VoicerProcessGroups belong to the voicer's proxy, not to the Voicer itself. This means you can change the Voicer that is to play the sequence while the sequence is playing (provided both voicers use the same clock as the sequence). As with Voicer-gui, under normal circumstances this is transparent to the user.
-
-emphasis::VoicerProcesses:: and emphasis::VoicerProcessGroups:: are deprecated and no longer maintained.
-
-method:: removeProcess(p)
-
-Stops the process group if playing and removes it from the Voicer and GUI.
-
-method:: stealer
-
-Chooses the algorithm the Voicer uses to find the next node to play. Your choices are:
-definitionlist::
-## \preferLate: 
-||prefers nodes that were more recently played
-## \preferEarly: 
-||the default setting; prefers nodes that were played longer ago
-## \random: 
-||chooses a non-playing node at random
-## \cycle: 
-||cycles through the nodes in sequence, skipping nodes that are playing
-##\strictCycle: 
-||cycles through the nodes in sequence, always in order whether they're playing or not
-::
-
-method:: latency
-
-Sets the default latency for this voicer. Default latency should be a positive number and can be overridden using the lat argument in trigger, release, gate, and set method calls.
-
-section:: Sequencing
-
-Voicer adds two new events that can be used with event streams (Pbind):
-definitionlist::
-##\voicerNote: 
-|| an alternate event type in the standard event framework, except that instead of including \instrument, \synthdefName in the Pbind, you should include \voicer, myVoicerObject. 
+For pattern usage: SynthDesc determines which arguments are transmitted in OSC messages. Normally this excludes gate, so we have to change a setting.
 
 code::
-v = Voicer(10, \default);
+SynthDescLib.at(\moogy).msgFuncKeepGate = true;
+
 (
-p = Pbind(\degree, Pseq((0..7), inf), 
-	\delta, 0.25, 
-	\sustain, Pwhite(1, 9, inf) * 0.25, 
-	\amp, Pwhite(0.001, 0.15, inf), 
-	\argKeys, #[\amp],   // leave this out and the amp stream will be ignored
-	\voicer, v, 
-	\type, \voicerNote  // leave this out and it will try to play on \instrument, default
+p = Pbind(
+	\type, \voicerNote,
+	\voicer, v,
+	\degree, Pwhite(-7, 7, inf),
+	\dur, Pwhite(1, 3, inf) * 0.25,
+	\legato, Pexprand(0.5, 3, inf),
+	\gate, Pexprand(0.1, 0.3, inf),
+	\ffreq, Pexprand(500, 2500, inf)
 ).play;
 )
+
 p.stop;
 ::
 
-## \voicerMIDI: 
-||a completely separate event prototype optimized for working with MIDIRecBuf. Not as flexible for general use, but easier for MIDI.
+The code::\voicerArtic:: event type uses notes with infinite sustain to slur to the next note. When you stop the pattern, these may continue to sustain, so you should release them with a separate instruction.
 
 code::
-v = Voicer(10, \default);
-k = VoicerMIDISocket(0, v);
-m = MIDIBufManager(chan:0);
-m.gui
-m.initRecord;  // recording starts when you start playing
-m.stopRecord;  // run this at the exact time you want the buffer to start looping
-
+(
 p = Pbind(
-	\note, Pseq(m[0].notes, inf),
+	\type, \voicerArtic,
 	\voicer, v,
-	\latency, 0.5,
-	\midi, true	// note frequencies are MIDI note numbers...
-// if true, the event will convert them to Hz -- true is the default
-// if you already converted them, set this to false
-).play(protoEvent: Event.makeProto(\voicerMIDI));
-
-// note above how you retrieve the voicerMIDI event prototype
+	\degree, Pwhite(-7, 7, inf),
+	\dur, Pwhite(1, 3, inf) * 0.25,
+	\legato, Pwrand([Pexprand(0.5, 0.9, 1), inf], [0.3, 0.7], inf),
+	\gate, Pexprand(0.1, 0.3, inf),
+	\ffreq, Pexprand(500, 2500, inf)
+).play;
+)
 
 p.stop;
+v.panic;
 ::
 
-You may also override note parameters individually: \freq is midi note number, \delta is \delta, \length corresponds to \sustain, and \gate corresponds to velocity.
+The code::\voicerArticOverlap:: event type supports polyphonic layers, distinguished by the code::\layerID:: event key.
 
 code::
-p = Pbind(
-	\note, Pseq(m[0].notes, inf),
-// replace with different note numbers, but leave the rhythm alone
-	\freq, Pwhite(48, 78, inf),
-	\voicer, v,
-	\latency, 0.5
-).play(protoEvent: Event.makeProto(\voicerMIDI));
+(
+p = Ppar(
+	Array.fill(3, { |i|
+		Pbind(
+			\type, \voicerArticOverlap,
+			\voicer, v,
+			\degree, Pwhite(-7, 7, inf),
+			\dur, Pwhite(1, 3, inf) * 0.25,
+			\legato, Pwrand([Pwhite(0.5, 0.9, 1), inf], [0.3, 0.7], inf),
+			\layerID, i
+		)
+	})
+).play;
+)
 
 p.stop;
+v.panic;
 ::
+
+Global controls appear in the built-in GUI (depends on crucial library).
+
 code::
+v = Voicer(5, \moogy, [ffreq: 5000, gain: 2.5]);
+
+v.mapGlobal(\ffreq, nil, 1500, \freq);
+
+(
+t = TempoClock(132/60);
+
 p = Pbind(
-	\note, Pseq(m[0].notes, inf),
-// round the original note's rhythmic value to nearest 1/32
-	\delta, Pfunc({ |event| event[\note].dur.round(0.125).max(0.125) }),
+	\type, \voicerNote,
 	\voicer, v,
-	\latency, 0.5
-).play(protoEvent: Event.makeProto(\voicerMIDI));
+	\degree, Pseq([7, Pn(0, { rrand(2, 6) })], inf),
+	\dur, 0.25,
+	\legato, 0.8,
+	\amp, 0.1,
+	\octave, 3
+).play(t);
+)
+
+v.gui;
+
+p.stop;
+t.stop;
+
+v.free;
+::
+
+When using non-gated synths (code::Env.perc::, or naturally decaying sounds, such as the ringing filters in the example below), a useful technique is to implement a cutoff envelope generator with a slightly offset gate value. If code::release:: is called on that node, the gate will be set to 0, and the offset will prevent the cutoff EG from releasing. However, if all the VoicerNodes are busy and a new node is played, the gate on the oldest node will be set to a value < -1. The offset is too small to prevent this from taking effect, so the note will be terminated immediately.
+
+Watch the server's count of synths in this example. At high note density, server activity remains bounded. At low density, notes decay naturally, and activity reduces without any artificial cutoffs.
+
+code::
+(
+SynthDef(\ringz, { |out, freq = 440, amp = 0.1, gate = 1,
+	excAtk = 0.01, excDcy = 0.05, pan = 0|
+	var harmonics = NamedControl.kr(\harmonics, (1..5));
+	var amps = NamedControl.kr(\amps, Array.series(5, 1.0, -0.15));
+	var rings = NamedControl.kr(\rings, Array.series(5, 5.0, -0.9));
+	var exciter = PinkNoise.ar * EnvGen.ar(Env.perc(excAtk, excDcy));
+	var ringydingy = Klank.ar(
+		`[harmonics, amps, rings], exciter,
+		freqscale: freq
+	);
+
+	// normally gate will be >= 0
+	// but if a node is stolen, gate < -1
+	// so we can use a slight offset to avoid this release in the normal case
+	var cutoffEg = EnvGen.kr(Env([1, 1, 0], [0.01, 0.01], releaseNode: 1),
+		gate + 0.001, doneAction: 2);
+
+	// natural release
+	DetectSilence.ar(ringydingy, doneAction: 2);
+
+	Out.ar(out, Pan2.ar(ringydingy, pan, amp * cutoffEg));
+}).add;
+)
+
+v = Voicer(10, \ringz);
+
+(
+p = Pbind(
+	\type, \voicerNote,
+	\voicer, v,
+	\freq, Pexprand(100, 800, inf),
+	\dur, sin(Ptime() * -0.15).linlin(-1, 1, 0.08, 3),
+	\amp, 0.01,
+).play;
+)
 
 p.stop;
 ::
+
+
+section:: Playing SynthDefs with hot-patching
+
+Using the ddwPlug quark, we can remove the filter frequency envelope from the main SynthDef.
+
+Note the syntax to use link::Classes/Syn:: instead of Synth.
+
+code::
+(
+SynthDef(\moogy2, { |out, freq = 440, detun = 1.008, gate = 1,
+	ffreq = 2000, gain = 2, pan = 0,
+	freqlag = 0.08|
+	var eg = EnvGen.kr(Env.adsr(0.01, 0.2, 0.6, 0.09), gate, doneAction: 2);
+	var sig = Saw.ar(Lag.kr(freq, freqlag) * [1, detun]).sum;
+	sig = MoogFF.ar(sig, ffreq.clip(20, 20000), gain);
+	Out.ar(out, Pan2.ar(sig, pan, eg * Latch.kr(gate, gate)));
+}).add;
+)
+
+// note syntax!
+v = Voicer(10, \syn -> \moogy2);
+
+v.gate(110, 2, 0.5, [ffreq: 2000]);
+
+v.gate(110, 2, 0.5, [ffreq: Plug { XLine.kr(8000, 2000, 0.12) }]);
 ::
+
+Patterns integrate global controls with Plug modulation using the link::Classes/Syn#Three-point modulation##three-point modulation:: technique described in the Syn help file.
+
+code::
+v.mapGlobal(\ffreq, nil, 2000, \freq);
+SynthDescLib.at(\moogy2).msgFuncKeepGate = true;
+
+(
+p = Pbind(
+	\type, \voicerNote,
+	\voicer, v,
+	\degree, Pwhite(-14, -4, inf),
+	\dur, Pwhite(1, 3, inf) * 0.125,
+	\gate, Pexprand(0.1, 0.3, inf),
+	
+	// ffreq is global; can't override directly
+	// but we can still Plug it
+	\ffreqPlug, { |ffreq|  // receives the bus-map symbol
+		Plug({ |ffreq|
+			ffreq * XLine.kr(4, 1, 0.12)
+		}, [ffreq: ffreq])
+	}
+).play;
+)
+
+v.globalControls[\ffreq].automateFade { LFDNoise3.kr(0.8).exprange(500, 8000) };
+
+p.stop;
+v.free;
+::
+
+section:: Playing MIDI or VSTs
+
+MIDI/VST usage cannot be 100% feature compatible. Where SC synths give you full access to all parameters, most MIDI hardware synthesizers or VST instruments expose only some parameters to MIDI control. Voicer attempts to make note playing and basic MIDI CC usage more or less similar to SC-synth Voicers, however.
+
+MIDI output uses my link::https://github.com/jamshark70/ddwMIDIMessageSend##ddwMIDIMessageSend:: quark. You are responsible for configuring the MIDI connection, including VSTPlugin instance(s), outside of the Voicer. See examples.
+
+
+subsection:: MIDI configuration args
+
+Use these "args" in Voicer.new to configure. Note that these should be set once, at the time of creating the Voicer, and should not be changed thereafter.
+
+General:
+
+definitionlist::
+## chan || The MIDI channel on which to play, using SC's numbering scheme 0-15. The channel selected on the device may need to add one.
+## int || True: Round note numbers to the nearest integer. False: Work internally with fractional note numbers. Default is false. Set to true if you're not using MPE microtuning and you're experiencing stuck or wrong notes.
+## accAmt || A factor by which to increase velocity for notes whose parameter list includes code::\acc, 1::.
+## overlap || True: The instrument or device support overlapping the same note number in multiple voices. False: The instrument cuts off older notes when a note-on with a previous note at the same pitch. Default is false. If notes get stuck when overlapping, consider setting this to true.
+::
+
+strong::MPE options::
+
+MIDI Polyphonic Expression, for those devices or VSTis that support it, brings MIDI note performance a bit closer to the kinds of control that are possible with SC synths. In MPE, each note is performed on its own channel. Pitch bend and MIDI CCs directed to a note's channel affect only that note. Of particular interest to myself is the performance of fractional note numbers, using per-channel pitch bend.
+
+Quick summary of the MPE standard: One MIDI channel is reserved as the master, for pitch bend or CC messages that should apply to all notes simultaneously. Within a single MIDI cable, two MPE zones can be activated: a lower zone, whose master channel is 0, and an upper zone, whose master channel is 15. Voicer's default settings assume you will use only the lower zone, and assign all 15 remaining channels to it. Master channel pitch bend defaults to +/- 2 semitones, while pitch bend on note channels defaults to +/- 48 semitones (to support wider glissandi).
+
+I've tried to follow the MPE specification as much as possible. If some of these design decisions seem strange at first, check the spec: link::https://midi.org/mpe-midi-polyphonic-expression::.
+
+definitionlist::
+## mpe || True: Use MPE features. False: Normal MIDI mode. (Note: Also sets teletype::overlap:: to true.)
+## mpeChannel || By default, setting teletype::mpe:: to true assigns channels 1-n to subsequent MIDIVoicerNodes, where n is the voice limit for the Voicer. teletype::mpeChannel:: overrides. See the "Dual MPE layers" example below.
+## mpeBendNoteScale || Default = 8192/48 = 170.6666667. If you want to use a different pitch bend range, specify code::8192 / semitones:: here. Make sure the device is configured to match.
+## mpeMonoBendTime || Determines what happens if a note on one of the note channels needs to slide to a different pitch. If the instrument supports fingered portamento within a channel, that's probably better; in that case, set mpeMonoBendTime to 0 (default). If this is set to a positive number, then gliding to the next pitch will be implemented by a pitchbend ramp, over the given time. Wide-ranging pitchbend portamento is likely to sound strange in sampled instruments.
+::
+
+
+subsection:: Examples
+
+strong::Hardware MIDI output::
+
+code::
+MIDIClient.init;
+
+// Linux style;
+// other platforms should follow a similar pattern as MIDIOut
+m = MIDISender(0);
+
+v = Voicer(5, \midi -> m);
+
+v.gate(60.midicps, 2, 0.5);
+
+(
+p = Pbind(
+	\type, \voicerNote,
+	\voicer, v,
+	\degree, Pwhite(-7, 7, inf),
+	\dur, Pwhite(1, 3, inf) * 0.25,
+	\legato, Pexprand(0.5, 3.0, inf)
+).play;
+)
+
+// global controls can sync to midi
+// server must be booted to use global controls,
+// even if server isn't rendering audio
+
+s.boot;
+
+// "ccnum: 1" assumes that the instrument has configured the mod wheel
+// to control, for example, filter frequency
+
+v.mapGlobal(\ffreq, nil, 120, [0, 127]);
+v.globalControls[\ffreq].connectMIDIOut(m, ccnum: 1);
+
+// 'set' interface transfers over
+v.set([ffreq: 20]);
+
+// automation also works, if '.watch'-ed
+v.globalControls[\ffreq].watch.automateFade { LFDNoise3.kr(1).range(30, 127) };
+
+p.stop;
+
+v.free;
+::
+
+strong::Basic VSTPlugin output::
+
+code::
+// VSTPlugin is managed outside the Voicer
+(
+SynthDef(\vst, { |out = 0|
+	Out.ar(out, VSTPlugin.ar(numOut: 2));
+}).add;
+)
+
+~vstPlayer = Synth(\vst);
+~vstCtl = VSTPluginController(~vstPlayer);
+~vstCtl.open("Surge XT.vst3");
+~vstCtl.editor;
+
+// create the port
+m = VSTPluginMIDISender(~vstCtl);
+
+v = Voicer(10, m);
+
+// from here, usage is identical:
+v.gate(60.midicps, 2, 0.5);
+
+(
+p = Pbind(
+	\type, \voicerNote,
+	\voicer, v,
+	\degree, Pwhite(-7, 7, inf),
+	\dur, Pwhite(1, 3, inf) * 0.25,
+	\legato, Pexprand(0.5, 3.0, inf)
+).play;
+)
+
+// in Surge, cc41 = Macro 1
+// in the XT interface, map macro 1 onto filter cutoff
+v.mapGlobal(\ffreq, nil, 120, [0, 127]);
+v.globalControls[\ffreq].connectMIDIOut(m, ccnum: 41);
+
+v.set([ffreq: 20]);
+v.gate(60.midicps, 2, 0.5);
+
+v.set([ffreq: 100]);
+v.gate(60.midicps, 2, 0.5);
+
+v.globalControls[\ffreq].watch.automateFade { LFDNoise3.kr(1).range(30, 127) };
+
+p.stop;
+
+v.free;  // VSTPlugin remains active
+::
+
+strong::Basic MPE usage::
+
+Using the same VST as above. Use the instrument's interface to enable MPE before continuing.
+
+code::
+v = Voicer(15, \midi -> m, [mpe: true]);
+
+// unnerving microtuning
+(
+p = Pbind(
+	\type, \voicerNote,
+	\voicer, v,
+	\degree, Pwhite(-7, 7, inf),
+	\ctranspose, Prand([0, -1/3, 1/3], inf),
+	\dur, Pwhite(1, 3, inf) * 0.25,
+	\legato, Pexprand(0.5, 3.0, inf)
+).play;
+)
+
+p.stop;
+v.panic;
+::
+
+strong::MPE polyphonic glides::
+
+The "poly glide" example above, using the code::\voicerArticOverlap:: event type, works transparently with MPE output! To use per-channel pitchbend for the gliding notes, enable code::mpeMonoBendTime::.
+
+code::
+v = Voicer(15, \midi -> m, [mpe: true, mpeMonoBendTime: 0.1]);
+
+(
+p = Ppar(
+	Array.fill(3, { |i|
+		Pbind(
+			\type, \voicerArticOverlap,
+			\voicer, v,
+			\degree, Pwhite(-7, 7, inf),
+			\dur, Pwhite(1, 3, inf) * 0.25,
+			\legato, Pwrand([Pwhite(0.5, 0.9, 1), inf], [0.3, 0.7], inf),
+			\layerID, i
+		)
+	})
+).play;
+)
+
+p.stop;
+v.panic;
+::
+
+strong::Dual MPE layers::
+
+I don't have a device with which to test this feature. In principle, if you want two MPE zones, you could configure two voicers as shown.
+
+The MIDI channel layout will be as follows. Consult the link::https://midi.org/mpe-midi-polyphonic-expression##MPE specification:: for more details.
+
+list::
+## 0: lower zone master channel
+## 1-7: lower zone note channels
+## 8-14: upper zone note channels
+## 15: upper zone master channel
+::
+
+You can distribute the 14 note channels as you like. (If you're using only one MPE zone, then it's 0 = master, 1-15 = notes. For two zones, 0 and 15 are reserved as master channels, leaving 14 available for notes.)
+
+code::
+// assuming 'm' is already the (VSTPlugin)MIDISender
+
+// send config messages to the device
+// this message format comes from the MPE spec
+(
+MIDIControlMessage(device: m)
+// lower zone: 0 is master channel
+.play(0x65, 0, 0).play(0x64, 6).play(6, 7)
+// upper zone: 15 is master channel
+.play(0x65, 0, 15).play(0x64, 6).play(6, 7);
+)
+
+~lower = Voicer(7, \midi -> m, [mpe: true]);
+~upper = Voicer(7, \midi -> m, [mpe: true, mpeChannel: (8..14)].flop);
+
+~lower.nodes.collect(_.midichannel)
+-> [1, 2, 3, 4, 5, 6, 7]
+
+~upper.nodes.collect(_.midichannel)
+-> [8, 9, 10, 11, 12, 13, 14]
+::
+
+So the channel indices are properly divided between the two zones. It's up to you to configure the device to match.

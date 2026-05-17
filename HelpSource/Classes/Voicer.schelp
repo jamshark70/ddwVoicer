@@ -1,71 +1,63 @@
 title:: Voicer
-summary:: A programmatically-controlled voice-stealing node manager. Written by H. James Harkins, jamshark70@gmail.com
+summary:: A programmatically-controlled voice-stealing node manager
 categories:: Libraries>Voicer
+related:: Guides/Using_Voicer
 keyword:: Voicer
 
 description::
 
-Voicer is an evolution on sc2's Voicer.ar. The SC2 voicer class did not implement MIDI. In contrast, a emphasis::DDW:: Voicer, can be placed in a VoicerMIDISocket, which includes all the necessary intelligence for note on/off, continuous controllers, and pitch bend messages. Multiple sockets can be created on the same channel with different Voicers and different key ranges, allowing complex keysplit configurations to be created.
+Voicer provides a programming interface that is more like conventional synthesizers than the standard SuperCollider classes.
+
+table::
+## strong::Standard SC:: || strong::Voicer::
+## Directly create and destroy nodes. || Central location to trigger, release or gate nodes.
+## You are responsible for tracking nodes. || Nodes are identified by frequency; no need to locate them yourself.
+## A rogue process can flood the server with nodes. || Voice stealing places an upper limit on server activity.
+## Control bus mapping must be manually applied for every note. || "Global controls" belong to the voicer and automatically apply to every note.
+## Syntaxes for Synth and MIDI are totally different. || One Voicer interface can talk to synths and MIDI devices or VST plugins (mostly) transparently.
+::
+
+See link::Guides/Using_Voicer##Using Voicer:: for practical use cases.
+
 
 subsection:: Features
 
 list::
-## Triggering and releasing notes by frequency -- no need to remember which node is playing which pitch.
+## Triggering and releasing notes by frequency. This simplifies use with a MIDI keyboard (link::Classes/VoicerMIDISocket::).
 
-## Automatic gating: notes or chords can be played for specific durations -- the release is scheduled using a clock of your choice. So if the clock is a TempoClock, you can specify durations in terms of beats very easily.
+## Automatic gating: Notes or chords can be played for specific durations using the link::#-gate:: method.
 
-## Arguments can be set aside as global, applying to all nodes simultaneously -- great for filter cutoffs, pitch bend, etc. The voicer's GUI window provides sliders for each global control which also respond to MIDI, if you have it set up that way.
+## "Global controls" apply to all nodes simultaneously, for example, filter cutoff, pitch bend, etc. The voicer's GUI window provides sliders for each global control which also respond to MIDI, if you have it set up that way.
 
-## Easy latency setting for rock-solid timing in sequencing
+## Support, in conjunction with VoicerMIDISocket, for Instr-miditest and SynthDef-miditest methods for testing new synths by MIDI. See the helpfile emphasis::miditest.:: (Note, this method hasn't been maintained for a long time.)
 
-## GUI support based on proxies, allowing easy reuse of GUI objects. See emphasis::VoicerProxy::.
+## Compatible with event patterns. See the link::Guides/Using_Voicer##Using Voicer:: Guide.
 
-## Support, in conjunction with VoicerMIDISocket, for Instr-miditest and SynthDef-miditest methods for testing new synths by MIDI. See the helpfile emphasis::miditest.::
+## Multiple output targets: Standard SC Synths, crucial-library Instrs, MIDI hardware and link::https://git.iem.at/pd/vstplugin##VSTPlugin:: instances using the link::https://github.com/jamshark70/ddwMIDIMessageSend##ddwMIDIMessageSend:: quark, and link::https://github.com/jamshark70/ddwPlug##ddwPlug:: Syn objects (for hot-patching per-note). Targets are rendered into "xxxVoicerNode" objects; primary Voicer features are compatible across all of these. So, for instance, a pattern written for a standard synth could play on a VST plugin just by changing the Voicer.
 
-## Compatible with event patterns -- Pbind etc. See the link::Guides/Using_Voicer##Using Voicer:: Guide.
-
-## Voicer works with SynthDefs and Instr's. You should not send a Patch directly to Voicer. Voicer takes the Instr with an argument list and makes its own Patches.
-
-## July 2020: Voicer can now send MIDI notes, and VoicerGlobalControls can send MIDI CC data. (Currently it is not supported to update global control values from a pattern, though.)
+## For MIDI voicers, VoicerGlobalControls can be attached to MIDI CCs.
 ::
 
-SynthDefs & Instr's used with voicer require the following features:
-
-list::
-## A variable-length envelope: Env.new with a releaseNode, Env.asr, Env.adsr, etc.
-
-## A freq argument, for the frequency that will be triggered. Other frequencies (filter cutoffs etc.) should be specified with other names.
-
-## An EnvGen whose doneAction is 2 -- the Voicer expects that Synth nodes will die after notes are released>
-
-## A gate argument to control the envelope.
-
-## If you use a SynthDef, use an argument called emphasis::outbus:: for the output bus index.
-
-::
+SynthDefs & Instr's used with Voicer follow SC convention by using teletype::freq:: for frequency, teletype::gate:: for note onset/release, and teletype::out:: for output bus. The SynthDef's main volume envelope should specify code::doneAction: 2::. Non-gated envelopes are supported, although note stealing requires a teletype::gate:: argument.
 
 For example:
 
 code::
 (
-SynthDef.new("harpsi", {
-	arg outbus = 0, freq = 440, gate = 0;
-	var out;
-	out = EnvGen.ar(Env.adsr, gate, doneAction:2) *
-	Pulse.ar(freq, 0.25, 0.75);
-	Out.ar(outbus, [out, out]);
+SynthDef.new("harpsi", { |out = 0, freq = 440, gate = 1, amp = 0.1|
+	var sig;
+	sig = EnvGen.ar(Env.adsr, gate, doneAction:2) * Pulse.ar(freq, 0.25, 0.75);
+	Out.ar(out, (sig * amp).dup);
 }).add;
 )
 
 // or
 
 (
-Instr.new([\harpsi], {
-	arg freq = 440, gate = 0;
-	var out;
-	out = EnvGen.ar(Env.adsr, gate, doneAction:2) *
-	Pulse.ar(freq, 0.25, 0.75);
-	[out, out]
+Instr.new([\harpsi], { |freq = 440, gate = 1, amp = 0.1|
+	var sig;
+	sig = EnvGen.ar(Env.adsr, gate, doneAction:2) * Pulse.ar(freq, 0.25, 0.75);
+	(sig * amp).dup
 });
 )
 ::
@@ -74,16 +66,16 @@ If you want the instrument to be velocity-sensitive, Latch the gate argument to 
 
 code::
 (
-SynthDef.new("harpsi", {
-	arg outbus = 0, freq = 440, gate = 0;
-	var out, amp;
-	amp = Latch.kr(gate, gate) * 0.5 + 0.5;
-	out = EnvGen.ar(Env.adsr, gate, doneAction:2) *
-	Pulse.ar(freq, 0.25, amp);
-	Out.ar(outbus, [out, out]);
+SynthDef.new("harpsi", { |out = 0, freq = 440, gate = 1, amp = 0.1|
+	var sig;
+	amp = amp * Latch.kr(gate, gate) * 0.5 + 0.5;
+	sig = EnvGen.ar(Env.adsr, gate, doneAction:2) * Pulse.ar(freq, 0.25, 0.75);
+	Out.ar(out, (sig * amp).dup);
 }).add;
 )
 ::
+
+note:: I had supported crucial-library Instr objects in the hope that they could modularize SynthDef construction, but it turns out they don't provide the infrastructure to do so polyphonically, at least not for Voicer's case. (The crucial library provides its own incompatible mechanism for that.) Syn and Plug are designed for this case. So in this help revision (5/2026) I am removing much of the documentation of more exotic Instr uses. ::
 
 
 classmethods::
@@ -91,20 +83,27 @@ classmethods::
 method:: new
 
 argument:: voices
-the maximum number of voices that can be played by this instance
+The maximum number of voices that can be played by this instance.
 
 argument:: things
-what should go into the nodes. If you supply a single thing, each node will use the same SynthDef. If you supply an array or other collection, the nodes will cycle through the collection. (This is another way to do the sc2 trick of the pattern that plays its successive events on different SynthDefs.)
+What should go into the nodes. This may be:
 
-You will find information about using Voicer with Event Patterns for sequencing in the  link::Guides/Using_Voicer##Using Voicer:: Guide.
+definitionlist::
+## String or symbol || Treated as a SynthDef name.
+## Instr object || Creates an InstrVoicerNode.
+## code::\midi -> aMIDISender:: or just a MIDISender object || Creates a MIDIVoicerNode.
+## code::\syn -> string_or_symbol:: || Creates a SynVoicerNode (ddwPlug quark).
+::
+
+If an array of these entities is supplied, ***VoicerNodes will be created round-robin style. A Voicer's nodes need not point to the same synth or even be of the same type.
 
 argument:: args
-can be a single argument array, such as [\ffreq, 10000], or an array of arg arrays: [ [\ffreq, 10000], [\ffreq, 15000] ].
-
-If args is an array, the arg arrays will be referenced using emphasis::wrapAt:: and assigned sequentially to the Voicer nodes. These arguments will be stored with each node and sent to every Synth that is placed on the server.
+can be a single argument array, such as code::[\ffreq, 10000]::, or an array of arg arrays: code::[ [\ffreq, 10000], [\ffreq, 15000] ]::. (A convenient way to produce an array of arrays is to code::.flop:: : code::[ffreq: [10000, 15000]].flop::.
 
 note:: Argument arrays should always be written [name, value, name1, value1...] — even for Instr's. This is different from the standard emphasis::crucial:: library usage.
 ::
+
+For Synth and code::\syn -> defname:: style Voicers, the args should be valid in Synth() or Syn(). For code::\midi -> sender:: style, some keys are reserved for configuration. See link::Guides/Using_Voicer#MIDI configuration args::
 
 argument:: bus
 the output bus to use.
@@ -115,92 +114,22 @@ anything that responds to .asTarget. If you supply a MixerChannel, both the bus 
 argument:: addAction
 where the Synths will be placed in relation to the target. This setting will be ignored by Patch nodes.
 
-discussion::
+
+method::parallelSynthGroup
+
+A Boolean flag, indicating whether the Voicer should create a link::Classes/ParGroup:: and put its synths into this group, for parallel processing of polyphony. (Useful only in supernova.)
+
+note:: If using the ddwPlug quark with supernova, set as follows:
 
 code::
-// with SynthDef (depends on Synths defined above):
-v = Voicer.new(8, "harpsi");  // 8 voices, all harpsi
-
-// with Instr & MixerChannel:
-s = Server.local; s.boot;
-m = MixerChannel.new("harpsi", s, 2, 2);
-v = Voicer.new(8, Instr.at([\harpsi]), target:m);
-
-// a nested Instr:
-(
-i = Instr([\harpsi], {
-	arg freq = 440, gate = 0;
-	var out;
-	out = EnvGen.ar(Env.adsr, gate, doneAction:2) *
-	Pulse.ar(freq, 0.25, 0.25);
-	[out,out]
-});
-
-f = Instr([\test, \rlpf], {
-	arg audio, ffreq = 500, rq = 0.1;
-	RLPF.ar(audio, ffreq, rq);
-});
-)
-
-// If you supply an Instr as an argument, it must be followed
-// by an argument array or nil. The Voicer makes a Patch for
-// the inner Instr using the arg array immediately following.
-
-v = Voicer(8, Instr.at([\test, \rlpf]),
-	[\audio, Instr.at([\harpsi]), nil, \ffreq, 5000, \rq, 0.08]);
+Voicer.parallelSynthGroup = true;
+Syn.useGroup = true;
+::
 ::
 
-Each note that is triggered on this last voicer will place two Synths on the server: one for the harpsi, and another for the filter. They will all use the same bus:  meaning that if you trigger several notes at once, the effect of the filter will be compounded for each note. This may not be the result you want. strong::In general, you should use simple, self-contained Instr's or synthdefs in a voicer.::
-
-note:: With Instr, any argument you supply as a SimpleNumber will be wrapped in a KrNumberEditor so you can change its value later. This is different from Patch. If you want a SimpleNumber to serve as a fixed argument, make it a Ref: [\fixed_filter_freq, `12500].::
-
-MIDI output, as of 8/2022, uses the ddwMIDIMessageSend quark. Create a Voicer with a MIDISender or VSTPluginMIDISender object as the "thing." In the args array, write code::chan: midichannel_num:: to specify the output channel. Because MIDI notes don't encapsulate any parameters other than velocity, all other code::args:: will be ignored.
-
-link::Classes/GlobalControlMIDIOut:: is the interface between a global control on this Voicer, and a MIDI CC on the remote device. First, create the global control. (The name doesn't matter.) Then attach a GlobalControlMIDIOut; a shortcut syntax is to call code::connectMIDIOut:: on the global control. All value changes will be forwarded to MIDI from this point forward.
-
-code::
-// MIDI output:
-m = MIDISender.newByName("device", "port");
-
-// write 'args: [chan: channel number]' to set the output channel
-v = Voicer(20, m, args: [chan: 0]);
-
-// let's say CC 1 on the remote device is connected to filter frequency
-// (you could use a different spec to display real-world values)
-v.mapGlobal(\ffreq, nil, 0, \midi).connectMIDIOut(m, 0, 1);
-::
-
-method::clock
-
-Now deprecated - the gate method uses thisThread.clock instead of a preset clock.
-
-If you want to do sequencing with this Voicer, you should set the clock to a TempoClock, preferably just after creation:
-
-code::
-t = TempoClock(144/60);	// 144 bpm
-v = Voicer(8, "harpsi").clock_(t);
-::
-
-If you do this, v.gate will only work within a Routine or Task that plays on the same TempoClock. If you will want to gate things from the command line, leave the clock as SystemClock, the default.
-
-
-
-method:: free
-
-Removes all Synth objects associated with this voicer from the server, cleans up its GUI window, and disconnects the Voicer from MIDI.
 
 
 instancemethods::
-
-method:: set
-
-Sends the same /n_set message to each node in this voicer. Global controls (see below) send the value to the associated kr bus.
-
-argument:: args
-See above in *new
-
-argument:: lat
-Server latency -- see below in trigger1 / trigger.
 
 method:: trigger1, trigger
 
@@ -218,11 +147,6 @@ see Discussion below
 discussion::
 Trigger a note (trigger1), or several notes (trigger). For trigger1, freq must be a float or int. For trigger, freq can be a single value or a collection. If you are triggering several notes, args can also be a collection of argument arrays e.g. [ [\filter, 300], [\filter, 500], [\filter, 700] ]. Each set of args will be sent in succession to the nodes as they're triggered (using wrapAt). In this case, the first node triggered will get \filter = 300, the second \filter = 500, etc.
 
-code::
-trigger1(freq, gate = 1, args, lat)
-trigger(freq, gate = 1, args, lat)
-::
-
 lat is the server latency to use for this event. The following values are allowed for all methods with a "lat" argument:
 definitionlist::
 ## Negative number / <0:
@@ -235,48 +159,63 @@ definitionlist::
 ||No latency: Server will play the message as soon as received
 ::
 
+
+method:: set
+
+Sends the same /n_set message to each node in this voicer. Global controls (see below) send the value to the associated kr bus.
+
+argument:: args
+See above in *new
+
+argument:: lat
+Server latency -- see below in trigger1 / trigger.
+
+note:: Because of latency being appended as a final value, the argument list must be enclosed in an array. This is different from link::Classes/Node#-set::. ::
+
+code::
+// brackets [ ] are mandatory!
+myVoicer.set([ffreq: 2000, amp: 0.3]);
+::
+
 method:: release1, release
 
 argument:: freq
-in Hz
+In Hz, the frequencies of the note(s) you wish to release. These frequencies must be equal to the frequencies stored in the target nodes. (What about floating point rounding? This won't be a problem as long as the mapping from MIDI note numbers or scale degrees is deterministic.)
 
 argument:: lat
 see trigger1 / trigger discussion above
 
-discussion::
-Returns the node played, or a collection of nodes played.
-
-code::
-release1(freq, lat)
-release(freq, lat)
-::
-
-method:: gate1, gate
-
-
-argument:: freq
-argument:: dur
-argument:: gate
-argument:: args
-argument:: lat
-
-discussion::
-Find the earliest-triggered note(s) with the frequency/frequencies given and send [\gate,0] to it. release1 allows only one frequency to be given; release works with either a single value or a collection. If there is no node with a given frequency, that frequency is ignored.
-
-Returns the node(s) released.
+returns:: The voicer.
 
 code::
 v = Voicer.new(8, "harpsi");  // uses Server.local
 f = Array.fill(5, { 1000.0.rand + 50 });
 v.trigger(f);  // play 5 notes
 v.release(f);  // release the same
-gate1(freq, dur, gate = 1, args, lat)
-gate(freq, dur, gate = 1, args, lat)
 ::
 
-Triggers the notes and schedules their releases. If freq is a collection, dur and args may be the same thing for every node, or you can supply collections to have different arguments and different release times for each node.
+
+method:: gate1, gate
+Triggers notes and schedules their releases. If freq is a collection, dur and args may be the same thing for every node, or you can supply collections to have different arguments and different release times for each node.
 
 Returns the node(s) played.
+
+argument:: freq
+In Hz.
+
+argument:: dur
+How many beats to sustain the note(s).
+
+argument:: gate
+Default = 1. Also carries velocity information.
+
+argument:: args
+As described in earlier methods.
+
+argument:: lat
+Latency value (above).
+
+discussion::
 
 code::
 f = Array.fill(5, { 1000.0.rand + 50 });
@@ -292,6 +231,11 @@ argument:: sec
 discussion::
 Uses a negative gate to cause an instant release. Sec determines how long the release takes. Unlike gate, you may not supply a collection for sec. (Sec is converted to the negative gate by sec.abs.neg-1)
 
+method:: free
+
+Removes all Synth objects associated with this voicer from the server, cleans up its GUI window, and disconnects the Voicer from MIDI.
+
+
 method:: panic
 
 Stops all active Synths belonging to this Voicer immediately.
@@ -304,13 +248,6 @@ code::
 aVoicer.playingNodes.choose.trace;
 ::
 
-method:: gui
-
-Creates a window showing all global controls (see mapGlobal) and processes (see addProcess).
-
-Voicer-gui uses a proxy system so that you can display different Voicers without incurring the overhead of removing views, resizing the window, adding views, and resizing again. For normal use, this process is transparent to the user. To change the Voicer shown in a particular GUI, drag an expression that evaluates to the Voicer (usually a variable name) into the drag sink immediately to the right of the Voicer GUI label.
-
-
 method:: mapGlobal, unmapGlobal
 
 argument:: name
@@ -320,66 +257,74 @@ argument:: spec
 argument:: allowGUI
 
 discussion::
+
+
 Creates an input to the Synth global, by using the supplied kr bus or creating a new one if no bus is supplied; input is mapped to that bus in each Voicer node. Newly triggered Voicer nodes will be mapped automatically. This lets you control filter cutoff frequencies, pitch bends, etc. globally for all nodes in a Voicer. A kr Synth can be played on the bus to provide an LFO.
 
 code::
 (
-i = Instr([\harpsi], {
-	arg freq = 440, gate = 0;
-	var out;
-	out = EnvGen.ar(Env.adsr, gate, doneAction:2) *
-	Pulse.ar(freq, 0.25, 0.25);
-	[out,out]
-}/*, [\freq, \amp]*/);
+SynthDef.new("harpsi", { |out = 0, freq = 440, gate = 1, amp = 0.1,
+	ffreq = 500, rq = 0.1|
+    var sig;
+    sig = EnvGen.ar(Env.adsr, gate, doneAction:2) * Pulse.ar(freq, 0.25, 0.75);
+	sig = RLPF.ar(sig, ffreq, rq);
+    Out.ar(out, (sig * amp).dup);
+}).add;
 
-f = Instr([\test, \rlpf], {
-	arg audio, ffreq = 500, rq = 0.1;
-	RLPF.ar(audio, ffreq, rq);
-});
-
-v = Voicer(8, f, [\audio, i, nil, \ffreq, 5000, \rq, 0.08]);
+v = Voicer(8, \harpsi, [\ffreq, 5000, \rq, 0.08]);
 )
 
 // globalize the filter cutoff
-b = v.mapGlobal(\ffreq);
-::
-code::
-
-(
-SynthDef.new("SinLFO", {	// sinewave lfo
-	arg outbus, freq = 1, phase = 0, mul = 1, add = 0;
-	ReplaceOut.kr(outbus, SinOsc.kr(freq, phase, mul, add));
-}).add;
-)
-
-l = Synth.new("SinLFO", [\freq, 0.2, \mul, 500, \add, 1400, \outbus, b.index]);
-
-// all notes have the same filter LFO
+v.mapGlobal(\ffreq, nil, 5000, \freq);
 
 v.trigger([60, 64, 67].midicps);
-v.unmapGlobal(\ffreq);  // LFO stops
-v.mapGlobal(\ffreq, b); // set LFO to bus (which is still active)
+
+v.set([ffreq: 3000]);  // automatically detects global control
+
+// modulate the filter for all notes together
+// it also crossfades vs the old value for a smooth connection
+v.globalControls[\ffreq].automateFade { SinOsc.kr(0.2).exprange(900, 2100) };
+
 v.release([60, 64, 67].midicps);
-l.free;
+
+// the modulator still exists, belonging to the VoicerGlobalControl
+// when we free the Voicer, the modulator goes away too
+v.free;
 ::
 
-method:: addProcess
 
-argument:: states
-argument:: type
+method:: globalControls
 
-discussion::
-Adds a VoicerProcessGroup to this Voicer. The group will be displayed as a button or pop-up menu in the Voicer's GUI. For a button, specify type as \toggle in the addProcess message. See the VoicerProcessGroup help file for the correct syntax for states. Returns the new process group.
+Returns the IdentityDictionary of all global controls existing on this voicer.
 
-This allows you to add graphically triggered sequencers and other processes directly to the Voicer GUI.
 
-VoicerProcessGroups belong to the Voicer's proxy, not to the Voicer itself. This means you can change the Voicer that is to play the sequence while the sequence is playing -- provided both Voicers use the same clock as the sequence. As with Voicer-gui, under normal circumstances this is transparent to the user.
+method:: nodes
 
-emphasis::VoicerProcesses:: and emphasis::VoicerProcessGroups:: are deprecated and no longer maintained.
+Returns the array of all nodes belonging to this voicer.
 
-method:: removeProcess
 
-Stops the process group if playing and removes it from the voicer and GUI.
+method:: playingNodes
+Returns an array of active nodes belonging to this voicer.
+
+method:: nonplaying
+
+Returns an array of idle nodes belonging to this voicer, or, if all nodes are busy, returns the earliest activated node.
+
+
+method:: sustainPedal
+Toggles the sustain pedal. If true, note releases will be withheld until the sustain pedal becomes false again. If no argument is provided, the value will be toggled to the opposite setting.
+
+argument:: sustain
+True (sustain pedal on) or false (sustain pedal off).
+
+
+method:: gui
+
+Creates a window showing all global controls (see mapGlobal) and processes (see addProcess).
+
+Voicer-gui uses a proxy system so that you can display different Voicers without incurring the overhead of removing views, resizing the window, adding views, and resizing again. For normal use, this process is transparent to the user. To change the Voicer shown in a particular GUI, drag an expression that evaluates to the Voicer (usually a variable name) into the drag sink immediately to the right of the Voicer GUI label.
+
+
 
 method:: stealer
 
@@ -401,3 +346,13 @@ method:: latency
 
 Sets the default latency for this Voicer. Default latency should be a positive number and can be overridden using the lat argument in trigger, release, gate, and set method calls.
 
+
+method:: run
+
+Similar to link::Classes/Node#-run::, if the Boolean flag is true, the nodes belonging to this voicer will be told to process audio. If false, they will be told to pause.
+
+argument:: bool
+True (run) or false (pause).
+
+
+private:: articulate, articulate1
