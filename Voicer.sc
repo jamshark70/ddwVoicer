@@ -91,14 +91,22 @@ Voicer {		// collect and manage voicer nodes
 		nodes = Array.new(voices);	// must add the nodes incrementally
 		lcm = th.size.lcm(args.size);
 		voices.do({ |i|
-			nodes = nodes.add(this.makeNode(th.wrapAt(i), args.wrapAt(i),
-					// i < th.size.lcm(args.size) : patches will become superfluous
-					// after least common multiple of # of instrs and # of arg sets
+			var node = this.makeNode(th.wrapAt(i), args.wrapAt(i),
+				// i < th.size.lcm(args.size) : patches will become superfluous
+				// after least common multiple of # of instrs and # of arg sets
 				(i < lcm).if({ nil }, // nil=not superfluous, make patch
-						// else, wrap around and get defname to reuse
+					// else, wrap around and get defname to reuse
 					{ nodes[i % lcm].defname })
-			));
+			);
+			nodes = nodes.add(node);
+			// default MPE channels
+			if(node.isKindOf(MIDIVoicerNode)) {
+				if(node.mpe == true and: { node.midichannel == 0 }) {
+					node.midichannel = i % 15 + 1;
+				};
+			};
 		});
+
 
 		susPedalNodes = IdentitySet.new;
 	}
@@ -745,7 +753,9 @@ Voicer {		// collect and manage voicer nodes
 		// that's for bookkeeping but sometimes something gets lost
 		// so brutally kill everything in the target group too
 		// panic means PANIC
-		target.freeAll;
+		if(nodes.any { |n| n.isKindOf(MIDIVoicerNode).not }) {
+			target.freeAll
+		};
 	}
 
 	cleanup {		// free non-playing nodes; kind of superfluous now
