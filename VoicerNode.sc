@@ -590,10 +590,11 @@ InstrVoicerNode : SynthVoicerNode {
 
 MIDIVoicerNode : SynthVoicerNode {
 	classvar fakeSynthDesc;
-	var midichannel = 0, lastVelocity, noteOffMsg, bendMsg;
+	var <midichannel = 0, <lastVelocity, noteOffMsg, bendMsg;
 	var noteFunc, bend = nil;
-	var mpe = false;
-	var bendHack = false;
+	var <mpe = false, <mpeBendNoteScale = 170.66666666667;  // 8192/48
+	var <overlap = false;
+	var <mpeMonoBendTime = 0, mpeBendOffset = 0, baseNoteNum, mpeBendThread;
 
 	*initClass {
 		var cn = [
@@ -620,7 +621,6 @@ MIDIVoicerNode : SynthVoicerNode {
 	init { |th, ar, b, targ, addAct, par|
 		var chanIndex;
 		// var mpe = false;  // Voicer(n, aMIDISender, [mpe: true])
-		var mpeBendNoteScale = 8192/48;
 		voicer = par;
 		noteFunc = { |note| bend = nil; note };
 		initArgDict = IdentityDictionary[\accAmt -> 0.2];
@@ -639,12 +639,10 @@ MIDIVoicerNode : SynthVoicerNode {
 			{ \mpe } {
 				if(value.asBoolean) {
 					mpe = true;
+					overlap = true;
 					noteFunc = { |note|
 						var midinote = note.round.asInteger;
-						// assuming bend range = 48 semitones (MPE spec)
-						// I should make that configurable
 						// -0.5 <= fractional part < 0.5
-						// this should map onto 1/4 of full PB range
 						// also: MIDIBendMessage expects -8192 <= x < 8192
 						// *unlike* MIDIOut, so do not add 8192
 						bend = ((note - midinote) * mpeBendNoteScale).round.asInteger;
@@ -652,15 +650,25 @@ MIDIVoicerNode : SynthVoicerNode {
 					};
 				}
 			}
-			{ \mpeChannel } {
-				if(mpe) { midichannel = value };
-			}
-			{ \bendHack } {
-				bendHack = value.asBoolean;
-			}
 			{ \accAmt } {
 				initArgDict.put(key, value);
-			};
+			}
+			{ \mpeChannel } {
+				initArgDict.put(key, value);
+				if(mpe) { midichannel = value };
+			}
+			{ \overlap } {
+				initArgDict.put(key, value);
+				if(mpe.not) { overlap = value }
+			}
+			{ \mpeBendNoteScale } {
+				initArgDict.put(key, value);
+				mpeBendNoteScale = value
+			}
+			{ \mpeMonoBendTime } {
+				initArgDict.put(key, value);
+				mpeMonoBendTime = value  // but used only in MPE mode
+			}
 		};
 		// this object handles note messages only
 		defname = MIDINoteMessage(
@@ -675,7 +683,7 @@ MIDIVoicerNode : SynthVoicerNode {
 		bendMsg = MIDIBendMessage(
 			value: 0,
 			channel: midichannel, device: th,
-			latency: if(bendHack) { nil } { Server.default.latency }
+			latency: Server.default.latency
 		);
 		lastVelocity = 64;
 	}
@@ -746,8 +754,12 @@ MIDIVoicerNode : SynthVoicerNode {
 	release { arg gate = 0, latency, freq;
 		var num;
 		if(this.shouldRelease(freq)) {
-			freq = freq ?? { frequency };
-			num = noteFunc.(freq.cpsmidi);
+			if(mpe and: { baseNoteNum.notNil }) {
+				num = baseNoteNum
+			} {
+				freq =  freq ?? { frequency };
+				num = noteFunc.(freq.cpsmidi);
+			};
 			if(this.releaseCheckNote(num)) {
 				noteOffMsg.play(num);
 			};
@@ -755,7 +767,21 @@ MIDIVoicerNode : SynthVoicerNode {
 			isReleasing = true;
 			this.releaseTime = nil;
 			id = 0;
+			mpeBendOffset = 0;
+			baseNoteNum = nil;
 		};
+	}
+
+	releaseNow {
+		128.do { |n|
+			noteOffMsg.play(n);
+		};
+		this.isPlaying = false;
+		isReleasing = true;
+		this.releaseTime = nil;
+		id = 0;
+		mpeBendOffset = 0;
+		baseNoteNum = nil;
 	}
 
 	isPlaying { ^isPlaying }
@@ -802,33 +828,54 @@ MIDIVoicerNode : SynthVoicerNode {
 					} {
 						vel = lastVelocity;
 					};
-					defname.play(note, vel);
-					if(bend.notNil) {
-						this.bend(bend) // bendMsg.play(bend)
-					};
-					SystemClock.sched(0.01, {
-						if(this.releaseCheckNote(oldNote)) {
-							noteOffMsg.play(oldNote);
+					if(mpe and: { mpeMonoBendTime > 0 }) {
+						if(baseNoteNum.isNil) {
+							baseNoteNum = oldNote
 						};
-					});
+						this.prBendGlideNote(note, oldNote, bend);
+					} {
+						this.prSetNote(note, oldNote, bend, vel);
+					};
 				};
 			};
 		};
 	}
+
+	prSetNote { |note, oldNote, bend, vel|
+		if(bend.notNil) {
+			this.bend(bend) // bendMsg.play(bend)
+		};
+		defname.play(note, vel);
+		SystemClock.sched(0.01, {
+			if(this.releaseCheckNote(oldNote)) {
+				noteOffMsg.play(oldNote);
+			};
+		});
+	}
+	prBendGlideNote { |note, oldNote, bend|
+		var current = mpeBendOffset;
+		var target = (current + bend + ((note - oldNote) * mpeBendNoteScale))
+		.clip(-8192, 8191);
+		var period = 0.01;
+		var steps = max(4, (mpeMonoBendTime / period).roundUp);
+		var step = (target - current) / steps;
+		mpeBendThread.stop;
+		mpeBendThread = {
+			steps.do { |i|
+				// continually updating, in case this glide is interrupted
+				mpeBendOffset = current + (step * (i+1));
+				bendMsg.play(mpeBendOffset);
+				period.wait;
+			};
+			mpeBendOffset = target;
+		}.fork(SystemClock);
+	}
+
 	setArgDefaults {}
 	getSynthDesc { ^fakeSynthDesc }
 
 	bend { |bend = 0|
-		if(bendHack) {
-			fork {
-				30.do { |offset|
-					bendMsg.play((bend + 8000.rand2).clip(-8000, 8000));
-					0.05.wait;
-				}
-			}
-		} {
-			bendMsg.play(bend)
-		}
+		bendMsg.play(bend)
 	}
 
 	// not really applicable but something upstream will complain if I don't...
@@ -840,6 +887,14 @@ MIDIVoicerNode : SynthVoicerNode {
 	mapArgs {}
 	displayName { ^defname.asString }
 	controlNames { ^IdentitySet.new }
+
+	// really for private use, generally don't do
+	midichannel_ { |chan|
+		midichannel = chan;
+		defname.channel = chan;
+		noteOffMsg.channel = chan;
+		bendMsg.channel = chan;
+	}
 }
 
 SynVoicerNode : SynthVoicerNode {
