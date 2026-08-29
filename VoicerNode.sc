@@ -300,14 +300,14 @@ SynthVoicerNode {
 		^nil		// if nothing to map
 	}
 
-	mapArgs { // assumes synth is loaded
+	mapArgs { |valueFunc({ |key, value| value })| // assumes synth is loaded
 		var out;
 		// if nothing's in the globalControls dictionary, no need to do anything
 		(voicer.globalControls.size > 0).if({
 			out = Array.new(voicer.globalControls.size * 2);
 			voicer.globalControls.keysValuesDo({ arg name, gc;
 				out.add(name);
-				out.add(("c" ++ gc.bus.index).asSymbol);
+				out.add(valueFunc.(name, ("c" ++ gc.bus.index).asSymbol));
 			});
 			^out
 		});
@@ -907,43 +907,19 @@ SynVoicerNode : SynthVoicerNode {
 
 	triggerMsg { arg freq, gate = 1, args;
 		var args2, gcs;
-		var plugKey, plug;
-		var fixPlug = { |args, key, value, i|
-			// in case we're in an event
-			plugKey = (key.asString ++ "Plug").asSymbol;
-			plug = plugKey.envirGet;
-			if(plug.canMakePlug) {
-				args[i+1] = plug.dereference.valueEnvir(value);
-			};
-		};
 		// assemble arguments
 		args2 = initArgs ++ [\gate, gate, \t_gate, gate];
 		// an arg could be a one-dimensional array
 		// but it shouldn't have more dimensions than that
 		args = (args ? []);
-		args.pairsDo { |key, value, i|
-			if(value.respondsTo(\flat)) { args[i+1] = value.flat };
-			// avoid duplicating Plugs
-			if(initArgDict[key].notNil and: {
-				value === initArgDict[key]
-			}) {
-				args[i] = nil;
-				args[i+1] = nil;
-			} {
-				fixPlug.(args, key, value, i);
-			};
-		};
+		args = this.processPlugArgs(args);
 
 		(args.notEmpty).if({ args2 = args2 ++ args.select(_.notNil) });
 		// this may need to change for freq plugs
-		freq.notNil.if({ args2 = args2 ++ [\freq, freq] });
-		fixPlug.(args2, \freq, freq, args2.size - 2);
+		freq.notNil.if({ args2 = args2 ++ [\freq, this.fixPlug(\freq, freq)] });
 
 		// experimental 24-0419: are there any plugs for GCs?
-		gcs = this.mapArgs;
-		gcs.pairsDo { |key, value, i|
-			fixPlug.(gcs, key, value, i);
-		};
+		gcs = this.mapArgs { |key, value| this.fixPlug(key, value) };
 
 		args2 = args2 ++ gcs ++ [\out, bus.index, \outbus, bus.index];
 		// make synth object
@@ -951,6 +927,32 @@ SynVoicerNode : SynthVoicerNode {
 		// note, no multichannel expansion here
 		// mc-expansion is handled in voicerNote events
 		^synth.prepareToBundle;
+	}
+
+	fixPlug { |key, value|
+		var plugKey, plug;
+		// in case we're in an event
+		plugKey = (key.asString ++ "Plug").asSymbol;
+		plug = plugKey.envirGet;
+		if(plug.canMakePlug) {
+			^plug.dereference.valueEnvir(value);
+		} {
+			^value
+		}
+	}
+	processPlugArgs { |args|
+		var out = Array(args.size);
+		args.pairsDo { |key, value, i|
+			if(value.respondsTo(\flat)) { value = value.flat };
+			// avoid duplicating Plugs
+			if(initArgDict[key].isNil or: {
+				value !== initArgDict[key]
+			}) {
+				value = this.fixPlug(key, value);
+				out.add(key).add(value);
+			};
+		};
+		^out
 	}
 
 	triggerCallBack { ^nil }	// this is what OSCSchedule uses for its clientsidefunc
@@ -1030,18 +1032,38 @@ SynVoicerNode : SynthVoicerNode {
 		});
 	}
 	setMsg { arg args;
+		var compareSource = { |a, b|
+			if(a.class != b.class) {  // btw 'a' should always be a Plug
+				false
+			} {
+				switch(a.source.class)
+				{ Function } { a.source.compareObject(b.source) }
+				{ a == b }
+			}
+		};
 		var ar;
 		this.isPlaying.if({
-			// ignore global controls (handled by Voicer.set)
-			args = (args ? []).clump(2)
-			.select({ arg a;
-				// no GCs for set
-				voicer.globalControls.at(a[0].asSymbol).isNil
-				// and no Plugs (maybe fix later)
-				and: { a[1].isKindOf(Plug).not }
-			})
-			.flatten(1);
-			^synth.setToBundle(nil, *args)
+			ar = Array(args.size);
+			args.pairsDo { |key, value|
+				// ignore global controls (handled by Voicer.set)
+				if(voicer.globalControls[key.asSymbol].isNil) {
+					value = this.fixPlug(key, value);
+					if(value.isKindOf(Plug)) {
+						// probably should factor this out, oh well
+						// and, doesn't this belong in processArgs or summat?
+						if(compareSource.(value, synth.argAtPath(key))) {
+							currentEnvironment.doForPrefix(key.asString ++ "/", { |k, v|
+								ar = ar.add(k).add(v);
+							});
+						} {
+							ar = ar.add(key).add(value);
+						};
+					} {
+						ar = ar.add(key).add(value);
+					};
+				};
+			};
+			^synth.setToBundle(nil, *ar);
 		}, {
 			^nil
 		});
