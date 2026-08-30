@@ -575,14 +575,14 @@ Voicer {		// collect and manage voicer nodes
 							value = eventWithoutParent[cname].wrapAt(i)
 								?? { argsDict[cname] }
 								?? { node.initArgAt(cname) };
-								// add value: environment overrides node's initarg,
-								// which overrides the SynthDef's default
-								// used to add synthdef default explicitly (c.defaultValue)
-								// but that breaks t_gate, so now adding only values
-								// that exist in the event or have Voicer-specific defaults
-								// 24-0419: globalControls check is mildly experimental
-								// 'trigger' will override any event value here
-								// (cost is low b/c IdentityDictionary lookup is fast)
+							// add value: environment overrides node's initarg,
+							// which overrides the SynthDef's default
+							// used to add synthdef default explicitly (c.defaultValue)
+							// but that breaks t_gate, so now adding only values
+							// that exist in the event or have Voicer-specific defaults
+							// 24-0419: globalControls check is mildly experimental
+							// 'trigger' will override any event value here
+							// (cost is low b/c IdentityDictionary lookup is fast)
 							if(value.notNil and: { globalControls[cname].isNil }) {
 								argList.add(cname).add(value)
 							};
