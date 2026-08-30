@@ -911,17 +911,11 @@ SynVoicerNode : SynthVoicerNode {
 		args2 = initArgs ++ [\gate, gate, \t_gate, gate];
 		// an arg could be a one-dimensional array
 		// but it shouldn't have more dimensions than that
-		args = (args ? []);
-		args = this.processPlugArgs(args);
-
+		args = (args ?? { [] });
 		(args.notEmpty).if({ args2 = args2 ++ args.select(_.notNil) });
-		// this may need to change for freq plugs
-		freq.notNil.if({ args2 = args2 ++ [\freq, this.fixPlug(\freq, freq)] });
-
-		// experimental 24-0419: are there any plugs for GCs?
-		gcs = this.mapArgs { |key, value| this.fixPlug(key, value) };
-
-		args2 = args2 ++ gcs ++ [\out, bus.index, \outbus, bus.index];
+		freq.notNil.if({ args2 = args2 ++ [\freq, freq] });
+		gcs = this.mapArgs;
+		args2 = this.processPlugArgs(args2 ++ gcs) ++ [\out, bus.index, \outbus, bus.index];
 		// make synth object
 		synth = Syn.perform(newMethod, this.asDefName, args2, target, addAction);
 		// note, no multichannel expansion here
@@ -935,22 +929,41 @@ SynVoicerNode : SynthVoicerNode {
 		plugKey = (key.asString ++ "Plug").asSymbol;
 		plug = plugKey.envirGet;
 		if(plug.canMakePlug) {
-			^plug.dereference.valueEnvir(value);
+			^plug.dereference.valueEnvir
 		} {
 			^value
 		}
 	}
 	processPlugArgs { |args|
 		var out = Array(args.size);
+		var keysIndices = IdentityDictionary.new;
+		var outI = 0;
+		var put = { |key, value|
+			var i = keysIndices[key];
+			if(i.isNil) {
+				keysIndices.put(key, outI);
+				outI = outI + 2;
+				out.add(key).add(value);
+			} {
+				out[(i+1)] = value
+			};
+		};
 		args.pairsDo { |key, value, i|
 			if(value.respondsTo(\flat)) { value = value.flat };
-			// avoid duplicating Plugs
-			if(initArgDict[key].isNil or: {
-				value !== initArgDict[key]
-			}) {
-				value = this.fixPlug(key, value);
-				out.add(key).add(value);
+			// avoid duplicating Plugs that were given at init time
+			// but this also skips numeric values in the incoming args
+			// that match init args, and we still need to check for plugs
+
+			// replace old logic with a true override
+			value = this.fixPlug(key, value);
+			put.(key, value);
+			if(value.isKindOf(Plug)) {
+				currentEnvironment.doForPrefix(key.asString ++ "/", { |k, v|
+					put.(k, v);
+					this.usePaths = true;
+				});
 			};
+
 		};
 		^out
 	}
@@ -1041,29 +1054,54 @@ SynVoicerNode : SynthVoicerNode {
 				{ a == b }
 			}
 		};
-		var ar;
+		var ar, gc, oldPlug, plugsToFree, bundle;
 		this.isPlaying.if({
 			ar = Array(args.size);
+
+			// a confusing wrinkle: if a GC exists with a "...Plug" arg in the event,
+			// it is *not* part of 'args' (if called from an event) but still needs to be checked
+			// also we need to delete plugs with the "...Plug" is set to a non-function
+			// so this is a fairly gross inefficiency actually --
+			// we're checking every globalControl every time, just *in case*
+			// we need to add or delete a Plug
+			// worth it though
+			voicer.globalControls.keysValuesDo { |key, value|
+				var v = this.fixPlug(key, value);
+				var o = synth.argAtPath(key);
+				if(v.isKindOf(Plug) or: { o.isKindOf(Plug) }) {
+					args = args.add(key).add(v);
+				};
+			};
 			args.pairsDo { |key, value|
 				// ignore global controls (handled by Voicer.set)
-				if(voicer.globalControls[key.asSymbol].isNil) {
-					value = this.fixPlug(key, value);
-					if(value.isKindOf(Plug)) {
-						// probably should factor this out, oh well
-						// and, doesn't this belong in processArgs or summat?
-						if(compareSource.(value, synth.argAtPath(key))) {
-							currentEnvironment.doForPrefix(key.asString ++ "/", { |k, v|
-								ar = ar.add(k).add(v);
-							});
-						} {
-							ar = ar.add(key).add(value);
-						};
-					} {
+				// but we want to be able to "plug" into GCs too
+				value = this.fixPlug(key, value);
+				oldPlug = synth.argAtPath(key);
+				if(value.isKindOf(Plug)) {
+					// probably should factor this out, oh well
+					// and, doesn't this belong in processArgs or summat?
+					if(compareSource.(value, oldPlug).not) {
 						ar = ar.add(key).add(value);
+					};
+					currentEnvironment.doForPrefix(key.asString ++ "/", { |k, v|
+						ar = ar.add(k).add(v);
+					});
+				} {
+					if(oldPlug.isKindOf(Plug)) {
+						plugsToFree = plugsToFree.add(oldPlug);
+					};
+					if((gc = voicer.globalControls[key.asSymbol]).isNil) {
+						ar = ar.add(key).add(value);
+					} {
+						ar = ar.add(key).add(gc.asMap);
 					};
 				};
 			};
-			^synth.setToBundle(nil, *ar);
+			// important! must free old plugs first
+			// the old plug might have a passthrough argument
+			// we have to get rid of that before resetting downstream to the right thing
+			plugsToFree.do { |plug| bundle = plug.freeToBundle(bundle) };
+			^synth.setToBundle(bundle, *ar);
 		}, {
 			^nil
 		});
