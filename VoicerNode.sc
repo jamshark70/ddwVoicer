@@ -923,15 +923,25 @@ SynVoicerNode : SynthVoicerNode {
 		^synth.prepareToBundle;
 	}
 
-	fixPlug { |key, value|
+	getPlugFactory { |key, value|
 		var plugKey, plug;
 		// in case we're in an event
 		plugKey = (key.asString ++ "Plug").asSymbol;
 		plug = plugKey.envirGet;
-		if(plug.canMakePlug) {
-			^plug.dereference.valueEnvir
+		^if(value.isKindOf(Plug).not and: { plug.canMakePlug }) {
+			plug
+		}  // nil if false
+	}
+	fixPlug { |key, value, passValue = false|
+		var factory = this.getPlugFactory(key, value);
+		^if(factory.notNil) {
+			if(passValue) {
+				factory.dereference.valueEnvir(value)
+			} {
+				factory.dereference.valueEnvir
+			}
 		} {
-			^value
+			value
 		}
 	}
 	processPlugArgs { |args|
@@ -1054,7 +1064,7 @@ SynVoicerNode : SynthVoicerNode {
 				{ a == b }
 			}
 		};
-		var ar, gc, oldPlug, plugsToFree, bundle;
+		var ar, gc, plugsToFree, bundle;
 		this.isPlaying.if({
 			ar = Array(args.size);
 
@@ -1066,22 +1076,28 @@ SynVoicerNode : SynthVoicerNode {
 			// we need to add or delete a Plug
 			// worth it though
 			voicer.globalControls.keysValuesDo { |key, value|
-				var v = this.fixPlug(key, value);
+				var v = this.getPlugFactory(key, value);
 				var o = synth.argAtPath(key);
-				if(v.isKindOf(Plug) or: { o.isKindOf(Plug) }) {
-					args = args.add(key).add(v);
+				if(v.notNil or: { o.isKindOf(Plug) }) {
+					// data source for a modulating Plug should be the symbol
+					// important: do not use 'v' here, it will overwrite Plugs
+					args = args.add(key).add(value.asMap);
 				};
 			};
 			args.pairsDo { |key, value|
-				// ignore global controls (handled by Voicer.set)
-				// but we want to be able to "plug" into GCs too
-				value = this.fixPlug(key, value);
-				oldPlug = synth.argAtPath(key);
-				if(value.isKindOf(Plug)) {
-					// probably should factor this out, oh well
-					// and, doesn't this belong in processArgs or summat?
-					if(compareSource.(value, oldPlug).not) {
+				// plug check:
+				// if sources match, keep the old Plug and update values
+				// if sources don't match, make a new Plug
+				// (and, Plug changing to non-Plug deletes the Plug)
+				// '.isSymbol': when making the plug, pass bus-mapping tokens directly
+				var newPlug = this.fixPlug(key, value, value.isSymbol);
+				var oldPlug = synth.argAtPath(key);
+				if(newPlug.isKindOf(Plug)) {
+					if(compareSource.(newPlug, oldPlug)) {
+						// keeping old Plug, passing through value from pattern
 						ar = ar.add(key).add(value);
+					} {
+						ar = ar.add(key).add(newPlug);
 					};
 					currentEnvironment.doForPrefix(key.asString ++ "/", { |k, v|
 						ar = ar.add(k).add(v);
@@ -1090,6 +1106,8 @@ SynVoicerNode : SynthVoicerNode {
 					if(oldPlug.isKindOf(Plug)) {
 						plugsToFree = plugsToFree.add(oldPlug);
 					};
+					// do not set global controls (handled by Voicer.set)
+					// they should be independent of a sequencer
 					if((gc = voicer.globalControls[key.asSymbol]).isNil) {
 						ar = ar.add(key).add(value);
 					} {
