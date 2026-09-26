@@ -555,17 +555,7 @@ Voicer {		// collect and manage voicer nodes
 						c.rate != \noncontrol and:
 							{ #[freq, gate, out, i_out, outbus].includes(c.name.asSymbol).not }
 					});
-					argList = Array((controls.size + ~forceArgs.size) * 2);
-					// forceArgs as dictionary is used for composite instruments
-					// but you may also want to forceArgs from the main event
-					// so we'll use a Ref to anything as a sentinel for that
-					~forceArgs.tryPerform(\keysValuesDo, { |key, value|
-						if(value.isKindOf(Ref)) {
-							argList.add(key).add(key.envirGet)
-						} {
-							argList.add(key).add(value);
-						};
-					});
+					argList = Array(controls.size * 2);
 					controls.do({ |c|
 						cname = c.name.asSymbol;
 						if(cname != '?') {
