@@ -953,7 +953,7 @@ SynVoicerNode : SynthVoicerNode {
 			if(i.isNil) {
 				keysIndices.put(key, outI);
 				outI = outI + 2;
-				out.add(key).add(value);
+				out = out.add(key).add(value);
 			} {
 				out[(i+1)] = value
 			};
