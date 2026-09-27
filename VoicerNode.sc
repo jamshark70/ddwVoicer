@@ -934,7 +934,17 @@ SynVoicerNode : SynthVoicerNode {
 	}
 	fixPlug { |key, value, passValue = false|
 		var factory = this.getPlugFactory(key, value);
+		var mapDict;
 		^if(factory.notNil) {
+			// global controls need to be available in the event.
+			// global control collection isn't guaranteed to be static,
+			// not going to do a complicated caching scheme today
+			// '.dict' because this is a ValidatingDictionary, not valid as event proto
+			// by definition, gcs override event keys
+			// (see triggerMsg, where gcs come last)
+			voicer.globalControls.keysValuesDo { |k, v|
+				currentEnvironment.put(k, v.asMap)
+			};
 			if(passValue) {
 				factory.dereference.valueEnvir(value)
 			} {
