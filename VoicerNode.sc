@@ -1040,13 +1040,11 @@ SynVoicerNode : SynthVoicerNode {
 			} {
 				switch(a.source.class)
 				{ Function } { a.source.compareObject(b.source) }
-				{ a == b }
+				{ a.source == b.source }
 			}
 		};
 		var ar, gc, plugsToFree, bundle;
 		this.isPlaying.if({
-			ar = Array(args.size);
-
 			// a confusing wrinkle: if a GC exists with a "...Plug" arg in the event,
 			// it is *not* part of 'args' (if called from an event) but still needs to be checked
 			// also we need to delete plugs with the "...Plug" is set to a non-function
@@ -1063,37 +1061,35 @@ SynVoicerNode : SynthVoicerNode {
 					args = args.add(key).add(value.asMap);
 				};
 			};
-			args.pairsDo { |key, value|
-				// plug check:
-				// if sources match, keep the old Plug and update values
-				// if sources don't match, make a new Plug
-				// (and, Plug changing to non-Plug deletes the Plug)
-				// '.isSymbol': when making the plug, pass bus-mapping tokens directly
-				var newPlug = this.fixPlug(key, value, value.isSymbol);
+			ar = args.processPlugArgs(passValue: true, hook: {
+				|key, value, newPlug, i, out, remove|
+
 				var oldPlug = synth.argAtPath(key);
+
 				if(newPlug.isKindOf(Plug)) {
-					if(compareSource.(newPlug, oldPlug)) {
-						// keeping old Plug, passing through value from pattern
-						ar = ar.add(key).add(value);
+					// if new Plug source matches old source,
+					// then we only pass a number through
+					if(compareSource.(newPlug, oldPlug).not) {
+						out = out.add(key).add(newPlug);
 					} {
-						ar = ar.add(key).add(newPlug);
+						out = out.add(key).add(value);  // numeric value
 					};
-					currentEnvironment.doForPrefix(key.asString ++ "/", { |k, v|
-						ar = ar.add(k).add(v);
-					});
+					// recursion is now in processPlugArgs
 				} {
+					out = out.add(key).add(value);
 					if(oldPlug.isKindOf(Plug)) {
 						plugsToFree = plugsToFree.add(oldPlug);
 					};
 					// do not set global controls (handled by Voicer.set)
 					// they should be independent of a sequencer
 					if((gc = voicer.globalControls[key.asSymbol]).isNil) {
-						ar = ar.add(key).add(value);
+						out = out.add(key).add(value);
 					} {
-						ar = ar.add(key).add(gc.asMap);
+						out = out.add(key).add(gc.asMap);
 					};
 				};
-			};
+				[out, newPlug ?? { value }]
+			});
 			// important! must free old plugs first
 			// the old plug might have a passthrough argument
 			// we have to get rid of that before resetting downstream to the right thing
