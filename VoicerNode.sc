@@ -915,7 +915,8 @@ SynVoicerNode : SynthVoicerNode {
 		(args.notEmpty).if({ args2 = args2 ++ args.select(_.notNil) });
 		freq.notNil.if({ args2 = args2 ++ [\freq, freq] });
 		gcs = this.mapArgs;
-		args2 = this.processPlugArgs(args2 ++ gcs) ++ [\out, bus.index, \outbus, bus.index];
+		args2 = (args2 ++ gcs).processPlugArgs(passValue: true)
+		++ [\out, bus.index, \outbus, bus.index];
 		// make synth object
 		synth = Syn.perform(newMethod, this.asDefName, args2, target, addAction);
 		// note, no multichannel expansion here
@@ -932,7 +933,8 @@ SynVoicerNode : SynthVoicerNode {
 			plug
 		}  // nil if false
 	}
-	fixPlug { |key, value, passValue = false|
+	// cannot use Event:fixPlug because of globalControls
+	fixPlug { |key, value, passValue = true|
 		var factory = this.getPlugFactory(key, value);
 		var mapDict;
 		^if(factory.notNil) {
@@ -953,39 +955,6 @@ SynVoicerNode : SynthVoicerNode {
 		} {
 			value
 		}
-	}
-	processPlugArgs { |args|
-		var out = Array(args.size);
-		var keysIndices = IdentityDictionary.new;
-		var outI = 0;
-		var put = { |key, value|
-			var i = keysIndices[key];
-			if(i.isNil) {
-				keysIndices.put(key, outI);
-				outI = outI + 2;
-				out = out.add(key).add(value);
-			} {
-				out[(i+1)] = value
-			};
-		};
-		args.pairsDo { |key, value, i|
-			if(value.respondsTo(\flat)) { value = value.flat };
-			// avoid duplicating Plugs that were given at init time
-			// but this also skips numeric values in the incoming args
-			// that match init args, and we still need to check for plugs
-
-			// replace old logic with a true override
-			value = this.fixPlug(key, value);
-			put.(key, value);
-			if(value.isKindOf(Plug)) {
-				currentEnvironment.doForPrefix(key.asString ++ "/", { |k, v|
-					put.(k, v);
-					this.usePaths = true;
-				});
-			};
-
-		};
-		^out
 	}
 
 	triggerCallBack { ^nil }	// this is what OSCSchedule uses for its clientsidefunc
