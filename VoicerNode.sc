@@ -905,7 +905,7 @@ SynVoicerNode : SynthVoicerNode {
 		newMethod = #[basicNew, basicNewByArgPaths][bool.binaryValue]
 	}
 
-	triggerMsg { arg freq, gate = 1, args;
+	triggerMsg { arg freq, gate = 1, args, event;
 		var args2, gcs;
 		// assemble arguments
 		args2 = initArgs ++ [\gate, gate, \t_gate, gate];
@@ -915,7 +915,7 @@ SynVoicerNode : SynthVoicerNode {
 		(args.notEmpty).if({ args2 = args2 ++ args.select(_.notNil) });
 		freq.notNil.if({ args2 = args2 ++ [\freq, freq] });
 		gcs = this.mapArgs;
-		args2 = (args2 ++ gcs).processPlugArgs(passValue: true)
+		args2 = (args2 ++ gcs).processPlugArgs(event, passValue: true)
 		++ [\out, bus.index, \outbus, bus.index];
 		// make synth object
 		synth = Syn.perform(newMethod, this.asDefName, args2, target, addAction);
@@ -960,13 +960,13 @@ SynVoicerNode : SynthVoicerNode {
 	triggerCallBack { ^nil }	// this is what OSCSchedule uses for its clientsidefunc
 	// InstrVoicerNode uses this
 
-	trigger { arg freq, gate = 1, args, latency;
+	trigger { arg freq, gate = 1, args, latency, event;
 		var bundle, watcher;
 		if(freq.isValidVoicerArg) {
 			this.shouldSteal.if({
 				this.stealNode(synth, latency);
 			});
-			bundle = this.triggerMsg(freq, gate, args);
+			bundle = this.triggerMsg(freq, gate, args, event);
 			synth.sendBundle(bundle, myLastLatency = latency);
 			// 'this' would exist in susPedalNodes if it was released while susPedal = on
 			// if we re-trigger it during that time, it's no longer 'released'
@@ -1028,12 +1028,13 @@ SynVoicerNode : SynthVoicerNode {
 		id = 0;
 	}
 
-	set { arg args, latency;
+	// 'event' is optional (pass in an event if you want arg values to come from the event)
+	set { arg args, latency, event;
 		(this.isPlaying).if({
-			this.setMsg(args).sendOnTime(target.server, latency);
+			this.setMsg(args, event).sendOnTime(target.server, latency);
 		});
 	}
-	setMsg { arg args;
+	setMsg { arg args, event;
 		var compareSource = { |a, b|
 			if(a.class != b.class) {  // btw 'a' should always be a Plug
 				false
@@ -1061,7 +1062,7 @@ SynVoicerNode : SynthVoicerNode {
 					args = args.add(key).add(value.asMap);
 				};
 			};
-			ar = args.processPlugArgs(passValue: true, hook: {
+			ar = args.processPlugArgs(event, passValue: true, hook: {
 				|key, value, newPlug, i, out, remove|
 
 				var oldPlug = synth.argAtPath(key);

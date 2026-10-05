@@ -435,7 +435,8 @@ Voicer {		// collect and manage voicer nodes
 		if(prev.notNil) {
 			// release-and-trigger if: not slurring OR prev is not playing
 			if(prev.isPlaying and: { prev.isReleasing.not and: { slur and: { prev.releaseTime.isNil } } }) {
-				prev.set(args ++ [freq: freq], lat);
+				// 'currentEnvironment' because this method is for Event support
+				prev.set(args ++ [freq: freq], lat, currentEnvironment);
 				prev.frequency = freq;
 				prev.lastTrigger = SystemClock.seconds;
 			} {
@@ -452,7 +453,7 @@ Voicer {		// collect and manage voicer nodes
 					prev.release(-1.008, latency: lat);  // -1 to suppress previous release envelope
 				};
 				prev.steal = false;
-				prev.trigger(freq, gate, args, lat);
+				prev.trigger(freq, gate, args, lat, currentEnvironment);
 				prev.steal = steal;
 				prev.id = saveID;
 			};
@@ -848,7 +849,7 @@ Voicer {		// collect and manage voicer nodes
 							var gate = ~gate.wrapAt(i), args = ~args.wrapAt(i);
 							if(freq.isRest.not) {
 								thisThread.clock.sched(timingOffset, {
-									node.trigger(freq, gate, args, if(node.server.latency.notNil) { lag + node.server.latency } { lag });
+									node.trigger(freq, gate, args, if(node.server.latency.notNil) { lag + node.server.latency } { lag }, currentEnvironment);
 								});
 								(length.notNil and: { length != inf }).if({
 									thisThread.clock.sched(length + timingOffset, {
@@ -916,7 +917,7 @@ Voicer {		// collect and manage voicer nodes
 
 						if(freq.isRest.not) {
 							thisThread.clock.sched(timingOffset, inEnvir {
-								node.trigger(freq, gate, args, if(node.server.latency.notNil) { lag + node.server.latency } { lag });
+								node.trigger(freq, gate, args, if(node.server.latency.notNil) { lag + node.server.latency } { lag }, currentEnvironment);
 							});
 							(length.notNil and: { length != inf }).if({
 								thisThread.clock.sched(length + timingOffset, {
@@ -990,7 +991,7 @@ Voicer {		// collect and manage voicer nodes
 						if(freq.isRest.not) {
 							thisThread.clock.sched(~timingOffset + (i * strum), inEnvir {
 								if(~forceNew == true) {
-									node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i), latency);
+									node.trigger(freq, ~gate.wrapAt(i), ~args.wrapAt(i), latency, currentEnvironment);
 								} {
 									voicer.prArticulate1(node, freq, nil, ~gate.wrapAt(i), ~args.wrapAt(i), latency,
 										slur: ~accent != true,
