@@ -915,7 +915,7 @@ SynVoicerNode : SynthVoicerNode {
 		(args.notEmpty).if({ args2 = args2 ++ args.select(_.notNil) });
 		freq.notNil.if({ args2 = args2 ++ [\freq, freq] });
 		gcs = this.mapArgs;
-		args2 = (args2 ++ gcs).processPlugArgs(event, passValue: true)
+		args2 = (args2 ++ gcs).processPlugArgs(event)
 		++ [\out, bus.index, \outbus, bus.index];
 		// make synth object
 		synth = Syn.perform(newMethod, this.asDefName, args2, target, addAction);
@@ -934,7 +934,7 @@ SynVoicerNode : SynthVoicerNode {
 		}  // nil if false
 	}
 	// cannot use Event:fixPlug because of globalControls
-	fixPlug { |key, value, passValue = true|
+	fixPlug { |key, value|
 		var factory = this.getPlugFactory(key, value);
 		var mapDict;
 		^if(factory.notNil) {
@@ -947,11 +947,7 @@ SynVoicerNode : SynthVoicerNode {
 			voicer.globalControls.keysValuesDo { |k, v|
 				currentEnvironment.put(k, v.asMap)
 			};
-			if(passValue) {
-				factory.dereference.valueEnvir(value)
-			} {
-				factory.dereference.valueEnvir
-			}
+			factory.dereference.valueEnvir(value)
 		} {
 			value
 		}
@@ -1062,7 +1058,7 @@ SynVoicerNode : SynthVoicerNode {
 					args = args.add(key).add(value.asMap);
 				};
 			};
-			ar = args.processPlugArgs(event, passValue: true, hook: {
+			ar = args.processPlugArgs(event, hook: {
 				|key, value, newPlug, i, out, remove|
 
 				var oldPlug = synth.argAtPath(key);
